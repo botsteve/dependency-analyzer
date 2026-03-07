@@ -1,10 +1,11 @@
 package io.botsteve.dependencyanalyzer.components;
-
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ContentDisplay;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.input.MouseButton;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeTableCell;
@@ -31,7 +32,7 @@ public class ColumnsComponent {
   public TreeTableColumn<DependencyNode, String> getBuildWithColumn() {
     TreeTableColumn<DependencyNode, String> buildWithColumn = new TreeTableColumn<>("Output");
     buildWithColumn.setCellValueFactory(param -> getSimpleStringProperty(param.getValue().getValue().getBuildWith()));
-    buildWithColumn.setCellFactory(column -> new javafx.scene.control.TreeTableCell<>() {
+    buildWithColumn.setCellFactory(column -> new TreeTableCell<>() {
       private String outputValue;
 
       {
@@ -83,8 +84,8 @@ public class ColumnsComponent {
   public TreeTableColumn<DependencyNode, String> getSCMTreeTableColumn() {
     TreeTableColumn<DependencyNode, String> scmColumn = new TreeTableColumn<>("SCM URL");
     scmColumn.setCellValueFactory(param -> getSimpleStringProperty(getSCMColumnValue(param)));
-    scmColumn.setCellFactory(column -> new javafx.scene.control.TreeTableCell<>() {
-      private final javafx.scene.control.Hyperlink link = new javafx.scene.control.Hyperlink();
+    scmColumn.setCellFactory(column -> new TreeTableCell<>() {
+      private final Hyperlink link = new Hyperlink();
       {
         link.setOnAction(event -> {
           String url = itemProperty().get();
@@ -137,7 +138,7 @@ public class ColumnsComponent {
       private static final String FOURTH_PARTY_CHECKBOX_STYLE_CLASS = "fourth-party-check-box";
       private static final String THIRD_PARTY_CHECKBOX_STYLE_CLASS = "third-party-check-box";
       private final CheckBox checkBox = new CheckBox();
-      private javafx.beans.property.BooleanProperty boundProperty;
+      private BooleanProperty boundProperty;
 
       {
         setContentDisplay(ContentDisplay.GRAPHIC_ONLY);

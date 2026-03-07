@@ -44,14 +44,14 @@ public class Utils {
      * @throws Exception when XML parsing fails
      */
     public static List<String> parseModulesFromPom(File pomFile) throws Exception {
-        List<String> modules = new ArrayList<>();
+      List<String> modules = new ArrayList<>();
 
-        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-        Document doc = dBuilder.parse(pomFile);
+      DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+      DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+      Document doc = dBuilder.parse(pomFile);
         doc.getDocumentElement().normalize();
 
-        NodeList nodeList = doc.getElementsByTagName("module");
+      NodeList nodeList = doc.getElementsByTagName("module");
         for (int i = 0; i < nodeList.getLength(); i++) {
             modules.add(nodeList.item(i).getTextContent());
         }
@@ -69,12 +69,12 @@ public class Utils {
      */
     public static String getProjectName(File pomFile) throws Exception {
 
-        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-        Document doc = dBuilder.parse(pomFile);
+      DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+      DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+      Document doc = dBuilder.parse(pomFile);
         doc.getDocumentElement().normalize();
 
-        NodeList nodeList = doc.getElementsByTagName("name");
+      NodeList nodeList = doc.getElementsByTagName("name");
         return nodeList.item(0).getTextContent();
     }
 
@@ -85,7 +85,7 @@ public class Utils {
      * @return configured value or empty string when absent
      */
     public static String getPropertyFromSetting(String property) {
-        var properties = loadSettings();
+      Properties properties = loadSettings();
         return properties.getProperty(property, "");
     }
 
@@ -95,8 +95,8 @@ public class Utils {
      * @return loaded settings
      */
     public static Properties loadSettings() {
-        Properties properties = new Properties();
-        Path settingsPath = resolveSettingsPath();
+      Properties properties = new Properties();
+      Path settingsPath = resolveSettingsPath();
         migrateLegacySettingsFileIfNeeded(settingsPath);
         try (InputStream is = new FileInputStream(settingsPath.toFile())) {
             properties.load(is);
@@ -113,7 +113,7 @@ public class Utils {
      * @param settingsList settings table rows
      */
     public static void saveSettings(ObservableList<EnvSetting> settingsList) {
-        Properties properties = new Properties();
+      Properties properties = new Properties();
         settingsList.forEach(setting -> properties.setProperty(setting.getName(), setting.getValue()));
 
         saveSettings(properties);
@@ -125,8 +125,8 @@ public class Utils {
      * @param properties properties to save
      */
     public static void saveSettings(Properties properties) {
-        Properties safeProperties = properties == null ? new Properties() : properties;
-        Path settingsPath = resolveSettingsPath();
+      Properties safeProperties = properties == null ? new Properties() : properties;
+      Path settingsPath = resolveSettingsPath();
         migrateLegacySettingsFileIfNeeded(settingsPath);
         ensureConfigDirectoryExists(settingsPath);
 
@@ -145,7 +145,7 @@ public class Utils {
      * @return {@code true} when required settings exist and point to valid JDK homes
      */
     public static boolean arePropertiesConfiguredAndValid() {
-        var missingProperties = getMissingJdkSettings();
+      List<String> missingProperties = getMissingJdkSettings();
         if (!missingProperties.isEmpty()) {
             showError("""
                     Dependencies might be targeted for compilation with different JDK versions.
@@ -155,7 +155,7 @@ public class Utils {
             return false;
         }
 
-        var invalidProperties = getInvalidJdkSettings();
+      List<String> invalidProperties = getInvalidJdkSettings();
         if (!invalidProperties.isEmpty()) {
             showError("""
                     The following JDK settings are invalid: %s
@@ -170,7 +170,7 @@ public class Utils {
      * Returns required JDK setting keys that are missing values.
      */
     public static List<String> getMissingJdkSettings() {
-        Properties properties = loadSettings();
+      Properties properties = loadSettings();
         return REQUIRED_JDK_SETTINGS.stream()
             .filter(key -> properties.getProperty(key, "").isBlank())
             .toList();
@@ -180,10 +180,10 @@ public class Utils {
      * Returns required JDK setting keys that point to invalid directories.
      */
     public static List<String> getInvalidJdkSettings() {
-        Properties properties = loadSettings();
+      Properties properties = loadSettings();
         return REQUIRED_JDK_SETTINGS.stream()
             .filter(key -> {
-                String value = properties.getProperty(key, "").trim();
+              String value = properties.getProperty(key, "").trim();
                 return !value.isBlank() && isInvalidJdkHome(new File(value));
             })
             .toList();
@@ -193,7 +193,7 @@ public class Utils {
      * Returns required JDK setting keys that are missing or invalid.
      */
     public static List<String> getMissingOrInvalidJdkSettings() {
-        LinkedHashSet<String> keys = new LinkedHashSet<>(getMissingJdkSettings());
+      LinkedHashSet<String> keys = new LinkedHashSet<>(getMissingJdkSettings());
         keys.addAll(getInvalidJdkSettings());
         return new ArrayList<>(keys);
     }
@@ -202,14 +202,14 @@ public class Utils {
      * Creates the settings file if it does not already exist.
      */
     public static void createSettingsFile() {
-        Path settingsPath = resolveSettingsPath();
+      Path settingsPath = resolveSettingsPath();
         migrateLegacySettingsFileIfNeeded(settingsPath);
         ensureConfigDirectoryExists(settingsPath);
 
-        File file = settingsPath.toFile();
+      File file = settingsPath.toFile();
         if (!file.exists()) {
             try {
-                Properties properties = new Properties();
+              Properties properties = new Properties();
                 file.createNewFile();
 
                 try (FileOutputStream fos = new FileOutputStream(file)) {
@@ -229,17 +229,17 @@ public class Utils {
     }
 
     private static Path resolveSettingsPath() {
-        String baseDir = System.getProperty(LogUtils.BASE_DIR_PROPERTY, System.getProperty("user.dir"));
+      String baseDir = System.getProperty(LogUtils.BASE_DIR_PROPERTY, System.getProperty("user.dir"));
         return Path.of(baseDir).resolve(SETTINGS_FILE_PATH).toAbsolutePath().normalize();
     }
 
     private static Path resolveLegacySettingsPath() {
-        String baseDir = System.getProperty(LogUtils.BASE_DIR_PROPERTY, System.getProperty("user.dir"));
+      String baseDir = System.getProperty(LogUtils.BASE_DIR_PROPERTY, System.getProperty("user.dir"));
         return Path.of(baseDir).resolve(LEGACY_SETTINGS_FILE_PATH).toAbsolutePath().normalize();
     }
 
     private static void ensureConfigDirectoryExists(Path settingsPath) {
-        Path parent = settingsPath.getParent();
+      Path parent = settingsPath.getParent();
         if (parent == null) {
             return;
         }
@@ -253,7 +253,7 @@ public class Utils {
     }
 
     private static void migrateLegacySettingsFileIfNeeded(Path settingsPath) {
-        Path legacySettingsPath = resolveLegacySettingsPath();
+      Path legacySettingsPath = resolveLegacySettingsPath();
         if (!Files.exists(legacySettingsPath) || Files.exists(settingsPath)) {
             return;
         }
@@ -275,7 +275,7 @@ public class Utils {
      */
     public static String getRepositoriesPath(String projectName) {
         try {
-            Path codeSourcePath = Paths.get(Utils.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+          Path codeSourcePath = Paths.get(Utils.class.getProtectionDomain().getCodeSource().getLocation().toURI());
             Path baseDir;
             
             if (codeSourcePath.toString().endsWith(".jar")) {
@@ -361,19 +361,19 @@ public class Utils {
      * @throws InterruptedException when process waiting is interrupted
      */
     public static String retrieveSourceCompatibility(File projectDir, String jdkPath) throws IOException, InterruptedException {
-        // Define the Gradle command
-        String wrapper = isWindows() ? "gradlew.bat" : "./gradlew";
-        String[] command = {wrapper, "properties", "-Porg.gradle.java.installations.auto-download=false"};
+      // Define the Gradle command
+      String wrapper = isWindows() ? "gradlew.bat" : "./gradlew";
+      String[] command = {wrapper, "properties", "-Porg.gradle.java.installations.auto-download=false"};
 
-        // Start the process
-        ProcessBuilder processBuilder = new ProcessBuilder(command);
+      // Start the process
+      ProcessBuilder processBuilder = new ProcessBuilder(command);
         processBuilder.directory(projectDir);
         processBuilder.redirectErrorStream(true);
         processBuilder.environment().put("JAVA_HOME", jdkPath);
-        Process process = processBuilder.start();
+      Process process = processBuilder.start();
 
-        // Read the output from the process
-        StringBuilder outputBuilder = new StringBuilder();
+      // Read the output from the process
+      StringBuilder outputBuilder = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -381,21 +381,21 @@ public class Utils {
             }
         }
 
-        // Wait for the process to complete
-        int exitCode = process.waitFor();
+      // Wait for the process to complete
+      int exitCode = process.waitFor();
         if (exitCode != 0) {
             throw new DependencyAnalyzerException("Command execution failed with exit code: " + exitCode);
         }
 
-        // Extract sourceCompatibility from the output
-        String output = outputBuilder.toString();
+      // Extract sourceCompatibility from the output
+      String output = outputBuilder.toString();
         return extractGradleSourceCompatibility(output);
     }
 
     private static String extractGradleSourceCompatibility(String output) {
-        // Define regular expression pattern to match sourceCompatibility
-        Pattern pattern = Pattern.compile("sourceCompatibility:\\s*(\\S+)");
-        Matcher matcher = pattern.matcher(output);
+      // Define regular expression pattern to match sourceCompatibility
+      Pattern pattern = Pattern.compile("sourceCompatibility:\\s*(\\S+)");
+      Matcher matcher = pattern.matcher(output);
 
         // Find the first occurrence of sourceCompatibility
         if (matcher.find()) {
@@ -422,8 +422,8 @@ public class Utils {
     }
 
     static int compareVersions(String v1, String v2) {
-        String left = v1 == null ? "" : v1.trim();
-        String right = v2 == null ? "" : v2.trim();
+      String left = v1 == null ? "" : v1.trim();
+      String right = v2 == null ? "" : v2.trim();
         if (left.isBlank() && right.isBlank()) {
             return 0;
         }
@@ -433,13 +433,13 @@ public class Utils {
         if (right.isBlank()) {
             return 1;
         }
-        String[] leftParts = left.split("[._-]");
-        String[] rightParts = right.split("[._-]");
-        int max = Math.max(leftParts.length, rightParts.length);
+      String[] leftParts = left.split("[._-]");
+      String[] rightParts = right.split("[._-]");
+      int max = Math.max(leftParts.length, rightParts.length);
         for (int i = 0; i < max; i++) {
-            String leftPart = i < leftParts.length ? leftParts[i] : "0";
-            String rightPart = i < rightParts.length ? rightParts[i] : "0";
-            int cmp = compareVersionPart(leftPart, rightPart);
+          String leftPart = i < leftParts.length ? leftParts[i] : "0";
+          String rightPart = i < rightParts.length ? rightParts[i] : "0";
+          int cmp = compareVersionPart(leftPart, rightPart);
             if (cmp != 0) {
                 return cmp;
             }
@@ -448,8 +448,8 @@ public class Utils {
     }
 
     private static int compareVersionPart(String left, String right) {
-        boolean leftNumeric = left.matches("\\d+");
-        boolean rightNumeric = right.matches("\\d+");
+      boolean leftNumeric = left.matches("\\d+");
+      boolean rightNumeric = right.matches("\\d+");
         if (leftNumeric && rightNumeric) {
             return new BigInteger(left).compareTo(new BigInteger(right));
         }
@@ -460,8 +460,8 @@ public class Utils {
             return -1;
         }
 
-        int leftRank = qualifierRank(left);
-        int rightRank = qualifierRank(right);
+      int leftRank = qualifierRank(left);
+      int rightRank = qualifierRank(right);
         if (leftRank != rightRank) {
             return Integer.compare(leftRank, rightRank);
         }
@@ -469,7 +469,7 @@ public class Utils {
     }
 
     private static int qualifierRank(String qualifier) {
-        String q = qualifier == null ? "" : qualifier.trim().toLowerCase(Locale.ROOT);
+      String q = qualifier == null ? "" : qualifier.trim().toLowerCase(Locale.ROOT);
         if (q.matches("alpha\\d*") || q.matches("a\\d*")) {
             return 1;
         }
@@ -499,8 +499,8 @@ public class Utils {
 
 
     private static boolean isInvalidJdkHome(File jdkHome) {
-        var binCheck = new File(jdkHome, "bin").isDirectory();
-        var libCheck = new File(jdkHome, "lib").isDirectory();
+      boolean binCheck = new File(jdkHome, "bin").isDirectory();
+      boolean libCheck = new File(jdkHome, "lib").isDirectory();
         log.info("The bin folder for path {} exists? {}", jdkHome.getPath(), binCheck);
         log.info("The lib folder for path {} exists? {}", jdkHome.getPath(), libCheck);
         return !binCheck || !libCheck;
@@ -514,7 +514,7 @@ public class Utils {
      * @return formatted multi-line text
      */
     public static String concatenateRepoNames(String header, Set<String> names) {
-        StringBuilder sb = new StringBuilder();
+      StringBuilder sb = new StringBuilder();
         sb.append(header).append("\n");
         sb.append(names.stream()
                 .map(name -> "- " + name)

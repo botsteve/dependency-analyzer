@@ -10,7 +10,7 @@ Use this file as the source of truth for commands, coding style, and validation.
 - Packaging: shaded runnable JAR via `maven-shade-plugin`
 - Tests: JUnit 5 + Mockito
 - Logging: SLF4J + Logback
-- Native build: GraalVM `native-maven-plugin` (`native`) and GluonFX (`gluonfx-native`)
+- Native build: GluonFX (`gluonfx-native`)
 
 ## Build / test / run commands (authoritative)
 
@@ -40,14 +40,7 @@ These forms are confirmed by existing repository docs and test usage.
 
 ### Native image build
 
-- `GRAALVM_HOME=/path/to/graalvm mvn clean package -Pnative -DskipTests`
 - `GRAALVM_HOME=/path/to/graalvm mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build`
-
-Native profile details (current baseline):
-
-- Uses `native-maven-plugin` and GraalVM reachability metadata repository support for dependency metadata
-- Imports JavaFX substrate reflection/JNI metadata resources via native-image build args
-- Includes JavaFX toolkit runtime initialization for native mode (`com.sun.javafx.tk.quantum.QuantumToolkit`, `com.sun.glass.ui.Application`)
 
 Gluon profile details (current baseline):
 
@@ -64,6 +57,7 @@ Prerequisites:
   - `src/main/resources/META-INF/native-image/resource-config.json`
   - `src/main/resources/META-INF/substrate/config/reflectionconfig.json`
   - `src/main/resources/META-INF/substrate/config/resourceconfig.json`
+- Avoid empty platform-specific substrate override files (`jniconfig-*.json`, `reflectionconfig-*.json`) unless they contain real platform overrides.
 
 ## Lint / formatting reality
 
@@ -171,7 +165,7 @@ If any of these files are added, treat them as mandatory and merge their rules i
 - Violating JavaFX thread rules.
 - Regressing dependency-tree filtering or selection propagation.
 - Assuming environment variables exist without validation.
-- Changing native-image-sensitive code/resources without metadata updates.
+- Changing Gluon/native-sensitive code/resources without metadata updates.
 - Performing unrelated formatting rewrites in functional PRs.
 
 ## Definition of done for agent changes

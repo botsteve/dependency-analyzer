@@ -10,9 +10,7 @@ This document explains how the application boots in both JVM and native modes, h
 
 ### Native entry point
 - `io.botsteve.dependencyanalyzer.NativeEntryPoint`
-- Used by both:
-  - `native` profile (`org.graalvm.buildtools:native-maven-plugin`)
-  - `gluonfx-native` profile (`com.gluonhq:gluonfx-maven-plugin`)
+- Used by `gluonfx-native` profile (`com.gluonhq:gluonfx-maven-plugin`)
 
 Native mode performs extra startup hardening before launching JavaFX:
 1. Forces an SLF4J provider (`slf4j-simple` first, Logback fallback).

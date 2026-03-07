@@ -13,17 +13,17 @@ public class UtilsTest {
 
     @Test
     public void testCollectLatestVersions() {
-        Set<DependencyNode> nodes = new HashSet<>();
-        
-        DependencyNode node1 = new DependencyNode();
+      Set<DependencyNode> nodes = new HashSet<>();
+
+      DependencyNode node1 = new DependencyNode();
         node1.setScmUrl("http://example.com/repo1");
         node1.setVersion("1.0.0");
-        
-        DependencyNode node2 = new DependencyNode();
+
+      DependencyNode node2 = new DependencyNode();
         node2.setScmUrl("http://example.com/repo1");
         node2.setVersion("1.1.0");
-        
-        DependencyNode node3 = new DependencyNode();
+
+      DependencyNode node3 = new DependencyNode();
         node3.setScmUrl("http://example.com/repo2");
         node3.setVersion("2.0.0");
 
@@ -31,7 +31,7 @@ public class UtilsTest {
         nodes.add(node2);
         nodes.add(node3);
 
-        Map<String, String> result = Utils.collectLatestVersions(nodes);
+      Map<String, String> result = Utils.collectLatestVersions(nodes);
 
         assertEquals(2, result.size());
         assertEquals("1.1.0", result.get("http://example.com/repo1"));

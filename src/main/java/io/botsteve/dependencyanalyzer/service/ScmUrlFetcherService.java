@@ -1,19 +1,18 @@
 package io.botsteve.dependencyanalyzer.service;
 
-import static io.botsteve.dependencyanalyzer.utils.ScmRepositories.fixNonResolvableScmRepositorise;
 import static io.botsteve.dependencyanalyzer.service.MavenInvokerService.getMavenInvokerResult;
+import static io.botsteve.dependencyanalyzer.utils.ScmRepositories.fixNonResolvableScmRepositorise;
 
+import io.botsteve.dependencyanalyzer.model.DependencyNode;
+import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import javax.xml.parsers.ParserConfigurationException;
-import org.apache.maven.shared.invoker.MavenInvocationException;
-import io.botsteve.dependencyanalyzer.model.DependencyNode;
-import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
-import org.xml.sax.SAXException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 public class ScmUrlFetcherService {
 
@@ -25,15 +24,12 @@ public class ScmUrlFetcherService {
   /**
    * Generates CycloneDX BOM for a Maven project and populates dependency SCM URLs from it.
    *
-   * @param projectDir Maven project directory
+   * @param projectDir   Maven project directory
    * @param dependencies dependency nodes that will be updated in place
-   * @throws ParserConfigurationException when XML parser setup fails
+   *
    * @throws IOException when BOM reading fails
-   * @throws SAXException when BOM parsing fails
-   * @throws MavenInvocationException when Maven execution fails
    */
-  public static void fetchScmUrls(String projectDir, Set<DependencyNode> dependencies)
-      throws ParserConfigurationException, IOException, SAXException, MavenInvocationException {
+  public static void fetchScmUrls(String projectDir, Set<DependencyNode> dependencies) throws IOException {
     getMavenInvokerResult(projectDir, "", CYCLONEDX_MAVEN, MAVEN_OPTS, System.getenv("JAVA_HOME"));
     populateVcsUrls(dependencies, parseBomFile(projectDir + "/target/bom.json"));
   }
@@ -42,28 +38,28 @@ public class ScmUrlFetcherService {
   private static Map<String, String> parseBomFile(String bomFilePath) throws IOException {
     Map<String, String> vcsUrlMap = new HashMap<>();
     File bomFile = new File(bomFilePath);
-    
-    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-    com.fasterxml.jackson.databind.JsonNode rootNode = mapper.readTree(bomFile);
-    com.fasterxml.jackson.databind.JsonNode components = rootNode.get("components");
+
+    ObjectMapper mapper = new ObjectMapper();
+    JsonNode rootNode = mapper.readTree(bomFile);
+    JsonNode components = rootNode.get("components");
 
     if (components != null && components.isArray()) {
-      for (com.fasterxml.jackson.databind.JsonNode component : components) {
-        String groupId = component.path("group").asText();
-        String artifactId = component.path("name").asText();
-        String version = component.path("version").asText();
+      for (JsonNode component : components) {
+        String groupId = component.path("group").asString();
+        String artifactId = component.path("name").asString();
+        String version = component.path("version").asString();
         String vcsUrl = SCM_URL_NOT_FOUND;
 
-        com.fasterxml.jackson.databind.JsonNode externalReferences = component.path("externalReferences");
+        JsonNode externalReferences = component.path("externalReferences");
         if (externalReferences.isArray()) {
-          for (com.fasterxml.jackson.databind.JsonNode ref : externalReferences) {
-            if ("vcs".equals(ref.path("type").asText())) {
-              vcsUrl = ref.path("url").asText();
+          for (JsonNode ref : externalReferences) {
+            if ("vcs".equals(ref.path("type").asString())) {
+              vcsUrl = ref.path("url").asString();
               break;
             }
           }
         }
-        
+
         String key = groupId + ":" + artifactId + ":" + version;
         String normalizedVcsUrl = SCM_URL_NOT_FOUND.equals(vcsUrl)
             ? SCM_URL_NOT_FOUND
@@ -86,5 +82,4 @@ public class ScmUrlFetcherService {
       }
     }
   }
-
 }

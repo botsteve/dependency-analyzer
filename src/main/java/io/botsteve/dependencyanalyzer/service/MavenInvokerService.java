@@ -1,5 +1,5 @@
 package io.botsteve.dependencyanalyzer.service;
-
+import io.botsteve.dependencyanalyzer.utils.Utils;
 import java.io.File;
 import java.util.Arrays;
 import org.apache.maven.shared.invoker.DefaultInvocationRequest;
@@ -33,7 +33,7 @@ public class MavenInvokerService {
                                                               String mavenOpts,
                                                               String jdkPath) {
     File toolchainsFile = null;
-    toolchainsFile = new File(io.botsteve.dependencyanalyzer.utils.Utils.getRepositoriesPath(), "toolchains.xml");
+    toolchainsFile = new File(Utils.getRepositoriesPath(), "toolchains.xml");
     if (toolchainsFile.exists()) {
         goals += " --toolchains " + toolchainsFile.getAbsolutePath();
     }
@@ -80,7 +80,7 @@ public class MavenInvokerService {
     log.info("Invoking Maven: goals=[{}] opts=[{}] JAVA_HOME=[{}] pom=[{}]", goals, mavenOpts,
              jdkPath, pomFile.getAbsolutePath());
 
-    var outputHandler = new CollectingOutputHandler();
+    CollectingOutputHandler outputHandler = new CollectingOutputHandler();
     request.setOutputHandler(outputHandler);
 
     InvocationResult result = null;
@@ -89,7 +89,7 @@ public class MavenInvokerService {
       log.info("Maven command finished with exit code: {}", result.getExitCode());
 
       if (result.getExitCode() != 0) {
-        var depViewerException = new DependencyAnalyzerException("Build failed!");
+        DependencyAnalyzerException depViewerException = new DependencyAnalyzerException("Build failed!");
         log.error("Build failed with exit code {}!", result.getExitCode(), depViewerException);
         throw depViewerException;
       }

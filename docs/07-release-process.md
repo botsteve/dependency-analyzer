@@ -15,7 +15,6 @@ Before cutting a release:
 3. Local validation passes:
    - `mvn test`
    - `mvn -B verify --file pom.xml`
-   - `GRAALVM_HOME=/path/to/graalvm mvn -Pnative -DskipTests package`
    - `GRAALVM_HOME=/path/to/graalvm mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build`
 4. Release notes draft is ready.
 
@@ -73,7 +72,6 @@ It is designed to publish artifacts on release events.
 Expected artifacts:
 
 - shaded JAR: `target/dependency-analyzer.jar`
-- Graal native binary (host dependent): `target/dependency-analyzer`
 - Gluon native binary (macOS host build): `target/gluonfx/aarch64-darwin/dependency-analyzer`
 
 Typical flow:

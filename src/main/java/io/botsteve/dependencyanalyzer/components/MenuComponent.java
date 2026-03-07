@@ -7,23 +7,18 @@ import java.util.Properties;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.Dialog;
-import javafx.scene.control.Menu;
-import javafx.scene.control.MenuBar;
-import javafx.scene.control.MenuItem;
-import javafx.scene.control.TextArea;
+import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import lombok.Data;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import javafx.stage.FileChooser;
-import java.io.IOException;
 import javafx.scene.control.CheckMenuItem;
 import io.botsteve.dependencyanalyzer.utils.FxUtils;
 import io.botsteve.dependencyanalyzer.model.EnvSetting;
@@ -47,7 +42,7 @@ public class MenuComponent {
               - Resolve SCM/source repository URLs using metadata and runtime SCM override mappings.
               - Download selected 3rd-party and 4th-party source repositories and checkout matching tags.
               - Build selected downloaded 3rd-party dependencies with Maven/Gradle/Ant using configured JDK toolchains (8/11/17/21).
-              - Package a GraalVM native executable with JavaFX metadata support from the Maven native profile.
+              - Package a GluonFX native executable with JavaFX metadata support from the gluonfx-native profile.
               - Auto-download required JDKs (8/11/17/21) for the current OS/architecture and update config/env-settings.properties.
               - Show live JDK download/extraction progress in the UI and in logs.
               - Temporarily lock the rest of the UI while JDK bootstrap is running to avoid conflicting actions.
@@ -93,10 +88,10 @@ public class MenuComponent {
       if (dialogButton == saveButtonType) {
         ObservableList<EnvSetting> settingsList = FXCollections.observableArrayList();
         content.getChildren().forEach(node -> {
-            if (node instanceof javafx.scene.layout.HBox) {
-                javafx.scene.layout.HBox row = (javafx.scene.layout.HBox) node;
-                String key = ((javafx.scene.control.Label) row.getChildren().get(0)).getText();
-                String value = ((javafx.scene.control.TextField) row.getChildren().get(1)).getText();
+            if (node instanceof HBox) {
+              HBox row = (HBox) node;
+              String key = ((Label) row.getChildren().get(0)).getText();
+              String value = ((TextField) row.getChildren().get(1)).getText();
                 settingsList.add(new EnvSetting(new SimpleStringProperty(key), new SimpleStringProperty(value)));
             }
         });
@@ -109,20 +104,20 @@ public class MenuComponent {
   }
 
   private void addSettingRow(VBox parent, Properties settings, String key, Stage stage) {
-      javafx.scene.layout.HBox row = new javafx.scene.layout.HBox(10);
-      row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-      
-      javafx.scene.control.Label label = new javafx.scene.control.Label(key);
+    HBox row = new HBox(10);
+      row.setAlignment(Pos.CENTER_LEFT);
+
+    Label label = new Label(key);
       label.setMinWidth(100);
-      
-      javafx.scene.control.TextField textField = new javafx.scene.control.TextField(settings.getProperty(key, ""));
+
+    TextField textField = new TextField(settings.getProperty(key, ""));
       textField.setPrefWidth(300);
-      
-      Button browseButton = new Button("Browse");
+
+    Button browseButton = new Button("Browse");
       browseButton.setOnAction(e -> {
-          javafx.stage.DirectoryChooser directoryChooser = new javafx.stage.DirectoryChooser();
+        DirectoryChooser directoryChooser = new DirectoryChooser();
           directoryChooser.setTitle("Select " + key);
-          File selectedDirectory = directoryChooser.showDialog(stage);
+        File selectedDirectory = directoryChooser.showDialog(stage);
           if (selectedDirectory != null) {
               textField.setText(selectedDirectory.getAbsolutePath());
           }
@@ -213,16 +208,16 @@ public class MenuComponent {
   }
 
   private void exportDependencies(Stage primaryStage) {
-     FileChooser fileChooser = new FileChooser();
+    FileChooser fileChooser = new FileChooser();
      fileChooser.setTitle("Save Dependencies");
      fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json"));
-     File file = fileChooser.showSaveDialog(primaryStage);
+    File file = fileChooser.showSaveDialog(primaryStage);
      if (file != null) {
          try {
-             ObjectMapper mapper = new ObjectMapper();
+           ObjectMapper mapper = new ObjectMapper();
              mapper.writerWithDefaultPrettyPrinter().writeValue(file, tableViewComponent.getAllDependencies());
              FxUtils.showAlert("Dependencies exported successfully!");
-         } catch (IOException e) {
+         } catch (Exception e) {
              FxUtils.showError("Failed to export dependencies: " + e.getMessage());
          }
      }
@@ -233,10 +228,10 @@ public class MenuComponent {
    */
   public MenuBar getMenuBar(Stage primaryStage) {
     MenuBar menuBar = new MenuBar();
-    var fileMenu = getFileMenu(primaryStage);
-    var settingsMenu = getSettingsMenu(primaryStage);
-    var viewMenu = getViewMenu(primaryStage);
-    var aboutMenu = getAboutMenu();
+    Menu fileMenu = getFileMenu(primaryStage);
+    Menu settingsMenu = getSettingsMenu(primaryStage);
+    Menu viewMenu = getViewMenu(primaryStage);
+    Menu aboutMenu = getAboutMenu();
 
     menuBar.getMenus().addAll(fileMenu, settingsMenu, viewMenu, aboutMenu);
     return menuBar;

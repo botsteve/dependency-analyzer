@@ -3,6 +3,7 @@ package io.botsteve.dependencyanalyzer.service;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -16,9 +17,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
 import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
@@ -52,7 +55,7 @@ public class ScmEnrichmentService {
     // Filter nodes that actually need a fetch
     Set<DependencyNode> nodesToFetch = allNodes.stream()
         .filter(ScmEnrichmentService::shouldFetch)
-        .collect(java.util.stream.Collectors.toSet());
+        .collect(Collectors.toSet());
 
     if (nodesToFetch.isEmpty()) {
       return;
@@ -154,7 +157,7 @@ public class ScmEnrichmentService {
     // 3. Follow Parent POM
     NodeList parentNodes = doc.getElementsByTagName("parent");
     if (parentNodes.getLength() > 0) {
-      org.w3c.dom.Element parent = (org.w3c.dom.Element) parentNodes.item(0);
+      Element parent = (Element) parentNodes.item(0);
       String pGroup = getTagValue(parent, "groupId");
       String pArtifact = getTagValue(parent, "artifactId");
       String pVersion = getTagValue(parent, "version");
@@ -171,8 +174,8 @@ public class ScmEnrichmentService {
   private static String extractScmFromDoc(Document doc) {
     NodeList scmNodes = doc.getElementsByTagName("scm");
     if (scmNodes.getLength() > 0) {
-      org.w3c.dom.Element scmElement = (org.w3c.dom.Element) scmNodes.item(0);
-      
+      Element scmElement = (Element) scmNodes.item(0);
+
       // Order of preference: <url> -> <connection> -> <developerConnection>
       String[] tags = {"url", "connection", "developerConnection"};
       for (String tag : tags) {
@@ -185,7 +188,7 @@ public class ScmEnrichmentService {
     return null;
   }
 
-  private static String getTagValue(org.w3c.dom.Element element, String tagName) {
+  private static String getTagValue(Element element, String tagName) {
     NodeList list = element.getElementsByTagName(tagName);
     if (list != null && list.getLength() > 0) {
         // Ensure we take the direct child tag value, not an inherited one deep inside
@@ -201,8 +204,8 @@ public class ScmEnrichmentService {
     try {
       // Try local .m2 repo first to save bandwidth/time
       String m2Repo = System.getProperty("user.home") + "/.m2/repository";
-      Path localPath = Paths.get(m2Repo, groupId.replace('.', '/'), artifactId, version, 
-                                 String.format("%s-%s.pom", artifactId, version));
+      Path localPath = Paths.get(m2Repo, groupId.replace('.', '/'), artifactId, version,
+          String.format("%s-%s.pom", artifactId, version));
       
       if (Files.exists(localPath)) {
         try (InputStream is = Files.newInputStream(localPath)) {
@@ -215,11 +218,11 @@ public class ScmEnrichmentService {
       // Fallback to Maven Central
       String groupPath = groupId.replace('.', '/');
       String pomUrl = String.format("%s/%s/%s/%s/%s-%s.pom",
-                                    MAVEN_CENTRAL_BASE, groupPath, artifactId, version, artifactId, version);
+          MAVEN_CENTRAL_BASE, groupPath, artifactId, version, artifactId, version);
 
       int attempt = 0;
       while (attempt <= MAX_RETRIES) {
-        HttpURLConnection connection = (HttpURLConnection) java.net.URI.create(pomUrl).toURL().openConnection();
+        HttpURLConnection connection = (HttpURLConnection) URI.create(pomUrl).toURL().openConnection();
         connection.setRequestMethod("GET");
         connection.setConnectTimeout(3000);
         connection.setReadTimeout(3000);

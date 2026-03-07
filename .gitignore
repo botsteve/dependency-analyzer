@@ -147,5 +147,7 @@ env-settings.properties
 dependency-reduced-pom.xml
 .sisyphus
 tmp/**
-config/
+/config/
+!src/main/resources/META-INF/substrate/config/
+!src/main/resources/META-INF/substrate/config/*.json
 downloaded_jdks/**

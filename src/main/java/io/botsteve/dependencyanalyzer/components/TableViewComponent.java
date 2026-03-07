@@ -13,21 +13,15 @@ import java.util.TreeSet;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableSet;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.CheckMenuItem;
-import javafx.scene.control.Label;
-import javafx.scene.control.MenuButton;
-import javafx.scene.control.TextField;
-import javafx.scene.control.Tooltip;
-import javafx.scene.control.TreeItem;
-import javafx.scene.control.TreeTableColumn;
-import javafx.scene.control.TreeTablePosition;
-import javafx.scene.control.TreeTableView;
+import javafx.scene.control.*;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import lombok.Data;
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
 
@@ -61,28 +55,28 @@ public class TableViewComponent {
     treeTableView.setColumnResizePolicy(TreeTableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
     treeTableView.setEditable(true);
 
-    javafx.scene.control.ContextMenu contextMenu = new javafx.scene.control.ContextMenu();
-    javafx.scene.control.MenuItem copyScmItem = new javafx.scene.control.MenuItem("Copy SCM URL");
+    ContextMenu contextMenu = new ContextMenu();
+    MenuItem copyScmItem = new MenuItem("Copy SCM URL");
     copyScmItem.setOnAction(event -> {
       DependencyNode selected = treeTableView.getSelectionModel().getSelectedItem() == null ? null : treeTableView.getSelectionModel().getSelectedItem().getValue();
       if (selected != null && selected.getScmUrl() != null) {
-        javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+        ClipboardContent content = new ClipboardContent();
         content.putString(selected.getScmUrl());
-        javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
+        Clipboard.getSystemClipboard().setContent(content);
       }
     });
 
-    javafx.scene.control.MenuItem copyGavItem = new javafx.scene.control.MenuItem("Copy GAV (group:artifact:version)");
+    MenuItem copyGavItem = new MenuItem("Copy GAV (group:artifact:version)");
     copyGavItem.setOnAction(event -> {
       DependencyNode selected = treeTableView.getSelectionModel().getSelectedItem() == null ? null : treeTableView.getSelectionModel().getSelectedItem().getValue();
       if (selected != null) {
-        javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+        ClipboardContent content = new ClipboardContent();
         content.putString(selected.getGroupId() + ":" + selected.getArtifactId() + ":" + selected.getVersion());
-        javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
+        Clipboard.getSystemClipboard().setContent(content);
       }
     });
 
-    javafx.scene.control.MenuItem copyCellItem = new javafx.scene.control.MenuItem("Copy Cell Value");
+    MenuItem copyCellItem = new MenuItem("Copy Cell Value");
     copyCellItem.setOnAction(event -> copyFocusedCellValue());
 
     contextMenu.getItems().addAll(copyScmItem, copyGavItem, copyCellItem);
@@ -465,21 +459,21 @@ public class TableViewComponent {
   public HBox creatToolsBox() {
     HBox box = new HBox(15);
     box.setAlignment(Pos.CENTER_LEFT);
-    box.setPadding(new javafx.geometry.Insets(5, 15, 5, 15));
+    box.setPadding(new Insets(5, 15, 5, 15));
     box.getStyleClass().add("tool-bar");
-    
+
     HBox filterBox = new HBox(8, filterLabel, filterInput, excludeFilterLabel, excludeFilterInput);
     filterBox.setAlignment(Pos.CENTER_LEFT);
-    
+
     HBox scopeBox = new HBox(8, new Label("Scope:"), scopeFilterMenu);
     scopeBox.setAlignment(Pos.CENTER_LEFT);
-    
+
     HBox projectBox = new HBox(8, new Label("Project:"), projectNameLabel);
     projectBox.setAlignment(Pos.CENTER_LEFT);
     projectNameLabel.getStyleClass().add("project-name-label");
-    
-    javafx.scene.layout.Region spacer = new javafx.scene.layout.Region();
-    HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
+
+    Region spacer = new Region();
+    HBox.setHgrow(spacer, Priority.ALWAYS);
     
     box.getChildren().addAll(filterBox, scopeBox, projectBox, spacer, statsLabel, selectAllCheckBox, cleanUpCheckBox);
     return box;
@@ -529,7 +523,7 @@ public class TableViewComponent {
   }
 
   private static Set<DependencyNode> sortedNodes(Set<DependencyNode> nodes) {
-    Set<DependencyNode> sorted = new java.util.LinkedHashSet<>();
+    Set<DependencyNode> sorted = new LinkedHashSet<>();
     if (nodes == null) {
       return sorted;
     }

@@ -12,8 +12,7 @@ class LicenseAggregationServicePathResolutionTest {
   void shouldResolveRepoNameFromScmUrl() throws Exception {
     DependencyNode node = new DependencyNode("g", "artifact-fallback", "1.0.0");
     node.setScmUrl("https://gitbox.apache.org/repos/asf?p=commons-io.git");
-    LicenseAggregationService.DependencyCoordinate coordinate =
-        new LicenseAggregationService.DependencyCoordinate("g", "artifact-fallback", "1.0.0");
+    LicenseAggregationService.DependencyCoordinate coordinate = new LicenseAggregationService.DependencyCoordinate("g", "artifact-fallback", "1.0.0");
 
     Method method = LicenseAggregationService.class.getDeclaredMethod(
         "resolveRepoName", DependencyNode.class, LicenseAggregationService.DependencyCoordinate.class);

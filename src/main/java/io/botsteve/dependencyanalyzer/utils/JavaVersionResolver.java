@@ -2,13 +2,21 @@ package io.botsteve.dependencyanalyzer.utils;
 
 import static io.botsteve.dependencyanalyzer.service.MavenInvokerService.getMavenInvokerResult;
 import static io.botsteve.dependencyanalyzer.utils.Utils.getPropertyFromSetting;
-
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import io.botsteve.dependencyanalyzer.model.CollectingOutputHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 public class JavaVersionResolver {
 
@@ -47,9 +55,9 @@ public class JavaVersionResolver {
    * Executes Maven effective-pom and extracts the required Java version.
    */
   public static String getJavaVersionMaven(File repo) {
-    var outputHandler = getMavenInvokerResult(repo.getAbsolutePath(),
-                                              "", "help:effective-pom",
-                                              "", System.getenv("JAVA_HOME"));
+    CollectingOutputHandler outputHandler = getMavenInvokerResult(repo.getAbsolutePath(),
+        "", "help:effective-pom",
+        "", System.getenv("JAVA_HOME"));
     List<String> outputLines = outputHandler.getOutput();
     String response = String.join("\n", outputLines);
     return resolveJavaVersionFromEffectivePom(response);
@@ -70,21 +78,21 @@ public class JavaVersionResolver {
       String effectivePomXml = effectivePomOutput.substring(startIndex, endIndex + 10);
 
       // Parse XML
-      javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
-      javax.xml.parsers.DocumentBuilder builder = factory.newDocumentBuilder();
-      org.w3c.dom.Document doc = builder.parse(new java.io.ByteArrayInputStream(effectivePomXml.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      DocumentBuilder builder = factory.newDocumentBuilder();
+      Document doc = builder.parse(new ByteArrayInputStream(effectivePomXml.getBytes(StandardCharsets.UTF_8)));
       doc.getDocumentElement().normalize();
 
       Set<Double> javaVersionDetected = new HashSet<>();
 
       // 1. Check properties (maven.compiler.source, maven.compiler.target, etc)
-      org.w3c.dom.NodeList properties = doc.getElementsByTagName("properties");
+      NodeList properties = doc.getElementsByTagName("properties");
       if (properties.getLength() > 0) {
-        org.w3c.dom.NodeList children = properties.item(0).getChildNodes();
+        NodeList children = properties.item(0).getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
-          org.w3c.dom.Node node = children.item(i);
-          if (node.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
-             String name = node.getNodeName();
+          Node node = children.item(i);
+          if (node.getNodeType() == Node.ELEMENT_NODE) {
+            String name = node.getNodeName();
              if (name.equals("maven.compiler.source") || name.equals("maven.compiler.target") || 
                  name.equals("maven.compiler.release") || name.equals("java.version")) {
                  parseAndAddVersion(node.getTextContent(), javaVersionDetected);
@@ -94,14 +102,14 @@ public class JavaVersionResolver {
       }
 
       // 2. Check maven-compiler-plugin configuration
-      org.w3c.dom.NodeList plugins = doc.getElementsByTagName("plugin");
+      NodeList plugins = doc.getElementsByTagName("plugin");
       for (int i = 0; i < plugins.getLength(); i++) {
-        org.w3c.dom.Element plugin = (org.w3c.dom.Element) plugins.item(i);
+        Element plugin = (Element) plugins.item(i);
         String artifactId = getTagValue(plugin, "artifactId");
         if ("maven-compiler-plugin".equals(artifactId)) {
-          org.w3c.dom.NodeList configs = plugin.getElementsByTagName("configuration");
+          NodeList configs = plugin.getElementsByTagName("configuration");
           if (configs.getLength() > 0) {
-             org.w3c.dom.Element config = (org.w3c.dom.Element) configs.item(0);
+            Element config = (Element) configs.item(0);
              parseAndAddVersion(getTagValue(config, "source"), javaVersionDetected);
              parseAndAddVersion(getTagValue(config, "target"), javaVersionDetected);
              parseAndAddVersion(getTagValue(config, "release"), javaVersionDetected);
@@ -111,8 +119,8 @@ public class JavaVersionResolver {
       
       // 3. Check maven-enforcer-plugin
        for (int i = 0; i < plugins.getLength(); i++) {
-        org.w3c.dom.Element plugin = (org.w3c.dom.Element) plugins.item(i);
-        String artifactId = getTagValue(plugin, "artifactId");
+         Element plugin = (Element) plugins.item(i);
+         String artifactId = getTagValue(plugin, "artifactId");
         if ("maven-enforcer-plugin".equals(artifactId)) {
              // Basic check for requireJavaVersion inside executions/configuration
              // This is complex in DOM, simple check for now:
@@ -144,8 +152,8 @@ public class JavaVersionResolver {
       }
   }
 
-  private static String getTagValue(org.w3c.dom.Element element, String tagName) {
-      org.w3c.dom.NodeList nodeList = element.getElementsByTagName(tagName);
+  private static String getTagValue(Element element, String tagName) {
+    NodeList nodeList = element.getElementsByTagName(tagName);
       if (nodeList.getLength() > 0) {
           return nodeList.item(0).getTextContent();
       }

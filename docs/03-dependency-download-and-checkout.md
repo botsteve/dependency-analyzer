@@ -44,7 +44,7 @@ Checkout-specific failures additionally include:
 ### JVM path
 - Uses JGit for clone/fetch and checkout/tag operations.
 
-### Native path (Graal/Gluon)
+### Native path (GluonFX)
 - Uses system `git` CLI for clone/fetch and checkout/tag operations.
 - This avoids native-image reflection gaps in JGit internals (for example enum/config metadata lookups).
 

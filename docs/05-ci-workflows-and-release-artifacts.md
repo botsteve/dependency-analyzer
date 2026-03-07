@@ -27,15 +27,6 @@ Artifact:
 Release behavior:
 - JAR is attached to GitHub Release on `release.published`.
 
-### `native-macos`
-Builds Graal native executable using `native` profile.
-
-Command:
-- `mvn -B package -Pnative -DskipTests`
-
-Artifact:
-- `target/dependency-analyzer`
-
 ### `gluon-native-macos`
 Builds Gluon native executable using `gluonfx-native` profile.
 
@@ -53,16 +44,13 @@ Availability behavior:
 - On `release`: if native build ultimately fails, workflow continues and logs warnings (best-effort native artifacts).
 - When endpoint is available, build command is retried up to 3 times with incremental backoff for transient network failures.
 
-## 3) Why both native jobs exist
+## 3) Native CI strategy
 
-- `native` profile validates the baseline Graal native plugin path.
-- `gluonfx-native` validates the JavaFX-focused native packaging route used for robust UI startup behavior.
-
-Keeping both jobs gives earlier signal when one native strategy regresses.
+- `gluonfx-native` is the only native CI path.
+- This keeps native validation aligned with the JavaFX-focused packaging route used in this repository.
 
 ## 4) Release artifacts
 
 On release publication, workflow uploads:
 - shaded JAR (required)
-- macOS Graal native binary (optional, best effort)
 - macOS Gluon native binary (optional, best effort)

@@ -109,8 +109,8 @@ public class ProxyUtil {
    */
   public static void configureProxySelector(String host, int proxyPort, List<String> noProxyHosts) {
     ProxySelector.setDefault(new ProxySelector() {
-      final Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(host, proxyPort == -1 ? 80 : proxyPort));
-      final List<String> bypassHosts = noProxyHosts == null ? List.of() : List.copyOf(noProxyHosts);
+    Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(host, proxyPort == -1 ? 80 : proxyPort));
+    List<String> bypassHosts = noProxyHosts == null ? List.of() : List.copyOf(noProxyHosts);
 
       @Override
       public List<Proxy> select(URI uri) {

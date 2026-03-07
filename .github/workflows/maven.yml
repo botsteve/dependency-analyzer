@@ -47,60 +47,6 @@ jobs:
       with:
         files: target/dependency-analyzer.jar
 
-  native-macos:
-    name: Native Image (macOS)
-    runs-on: macos-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up GraalVM JDK 21
-      uses: graalvm/setup-graalvm@v1
-      with:
-        java-version: '21'
-        distribution: 'graalvm-community'
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        cache: maven
-        components: 'native-image'
-
-    - name: Verify native-image installation
-      run: native-image --version
-
-    - name: Build native binary with Maven profile
-      id: native_build
-      run: |
-        if mvn -B package -Pnative -DskipTests; then
-          echo "build_ok=true" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        echo "build_ok=false" >> "$GITHUB_OUTPUT"
-        if [ "${{ github.event_name }}" = "release" ]; then
-          echo "::warning::Native macOS build failed during release workflow. Continuing without native macOS artifact."
-          exit 0
-        fi
-        exit 1
-      env:
-        GRAALVM_HOME: ${{ env.JAVA_HOME }}
-
-    - name: Assert native binary exists
-      if: steps.native_build.outputs.build_ok == 'true'
-      run: test -x target/dependency-analyzer
-
-    - name: Upload Native Artifact
-      if: steps.native_build.outputs.build_ok == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: dependency-analyzer-native-macos
-        path: target/dependency-analyzer
-        if-no-files-found: error
-
-    - name: Publish Native Binary to Release
-      if: github.event_name == 'release' && steps.native_build.outputs.build_ok == 'true'
-      uses: softprops/action-gh-release@v2
-      with:
-        files: target/dependency-analyzer
-
   gluon-native-macos:
     name: Gluon Native Image (macOS)
     runs-on: macos-latest

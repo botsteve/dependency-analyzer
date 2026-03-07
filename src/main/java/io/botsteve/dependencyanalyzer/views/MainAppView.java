@@ -4,7 +4,13 @@ package io.botsteve.dependencyanalyzer.views;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ToolBar;
+import javafx.scene.control.TreeTableColumn;
+import javafx.scene.control.TreeTableView;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -15,13 +21,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.net.URL;
 import java.util.logging.Level;
+import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyBooleanProperty;
 import io.botsteve.dependencyanalyzer.components.ButtonsComponent;
 import io.botsteve.dependencyanalyzer.components.CheckBoxComponent;
 import io.botsteve.dependencyanalyzer.components.ColumnsComponent;
 import io.botsteve.dependencyanalyzer.components.MenuComponent;
 import io.botsteve.dependencyanalyzer.components.ProgressBoxComponent;
 import io.botsteve.dependencyanalyzer.components.TableViewComponent;
+import io.botsteve.dependencyanalyzer.model.DependencyNode;
 
 @Data
 public class MainAppView {
@@ -42,24 +52,29 @@ public class MainAppView {
 
     BorderPane root = new BorderPane();
     Scene scene = new Scene(root, 1000, 800);
-    var treeTableView = tableViewComponent.getTreeTableView();
-    var dependencyColumn = columnsComponent.getDependencyTreeTableColumn();
-    var scopeColumn = columnsComponent.getScopeColumn();
-    var scmColumn = columnsComponent.getSCMTreeTableColumn();
-    var selectColumn = columnsComponent.getSelectTreeTableColumn();
-    var checkoutTagColumn = columnsComponent.getCheckoutTagColumn();
-    var buildWithColumn = columnsComponent.getBuildWithColumn();
-    treeTableView.getColumns().addAll(selectColumn, dependencyColumn, scopeColumn, scmColumn, checkoutTagColumn, buildWithColumn);
+    TreeTableView<DependencyNode> treeTableView = tableViewComponent.getTreeTableView();
+    TreeTableColumn<DependencyNode, String> dependencyColumn = columnsComponent.getDependencyTreeTableColumn();
+    TreeTableColumn<DependencyNode, String> scopeColumn = columnsComponent.getScopeColumn();
+    TreeTableColumn<DependencyNode, String> scmColumn = columnsComponent.getSCMTreeTableColumn();
+    TreeTableColumn<DependencyNode, Boolean> selectColumn = columnsComponent.getSelectTreeTableColumn();
+    TreeTableColumn<DependencyNode, String> checkoutTagColumn = columnsComponent.getCheckoutTagColumn();
+    TreeTableColumn<DependencyNode, String> buildWithColumn = columnsComponent.getBuildWithColumn();
+    treeTableView.getColumns().add(selectColumn);
+    treeTableView.getColumns().add(dependencyColumn);
+    treeTableView.getColumns().add(scopeColumn);
+    treeTableView.getColumns().add(scmColumn);
+    treeTableView.getColumns().add(checkoutTagColumn);
+    treeTableView.getColumns().add(buildWithColumn);
     treeTableView.setTreeColumn(dependencyColumn);
     columnsComponent.configureColumnsWidthStyle(selectColumn, dependencyColumn, scopeColumn, scmColumn, checkoutTagColumn, buildWithColumn);
     checkBoxComponent.configureCheckBoxAction();
 
-    var progressBar = progressBoxComponent.createProgressBar();
-    var progressLabel = progressBoxComponent.createProgressLabel();
-    var progressBox = progressBoxComponent.createProgressBox(progressBar, progressLabel, scene);
-    var toolBar = buttonsComponent.getToolBar(primaryStage, progressBar, progressLabel);
-    var toolsBox = tableViewComponent.creatToolsBox();
-    var jdkDownloadRunning = buttonsComponent.jdkDownloadRunningProperty();
+    ProgressBar progressBar = progressBoxComponent.createProgressBar();
+    Label progressLabel = progressBoxComponent.createProgressLabel();
+    VBox progressBox = progressBoxComponent.createProgressBox(progressBar, progressLabel, scene);
+    ToolBar toolBar = buttonsComponent.getToolBar(primaryStage, progressBar, progressLabel);
+    HBox toolsBox = tableViewComponent.creatToolsBox();
+    ReadOnlyBooleanProperty jdkDownloadRunning = buttonsComponent.jdkDownloadRunningProperty();
 
     toolsBox.disableProperty().bind(jdkDownloadRunning);
     treeTableView.disableProperty().bind(jdkDownloadRunning);
@@ -71,7 +86,7 @@ public class MainAppView {
     root.setCenter(vbox);
 
     // Configure MenuBar
-    var menuBar = menuComponent.getMenuBar(primaryStage);
+    MenuBar menuBar = menuComponent.getMenuBar(primaryStage);
     menuBar.disableProperty().bind(jdkDownloadRunning);
     root.setTop(menuBar);
 
@@ -80,12 +95,12 @@ public class MainAppView {
     root.setBottom(developerLabel);
     primaryStage.setTitle("Dependency Analyzer");
     primaryStage.setOnShown(event -> {
-      javafx.application.Platform.setImplicitExit(true);
+      Platform.setImplicitExit(true);
       log.info("Main JavaFX stage shown");
       JUL_LOG.log(Level.INFO, "Main JavaFX stage shown");
       startupProbe("Main JavaFX stage onShown fired");
     });
-    var stylesheetUrl = getClass().getResource("/styles.css");
+    URL stylesheetUrl = getClass().getResource("/styles.css");
     if (stylesheetUrl != null) {
       scene.getStylesheets().add(stylesheetUrl.toExternalForm());
     }

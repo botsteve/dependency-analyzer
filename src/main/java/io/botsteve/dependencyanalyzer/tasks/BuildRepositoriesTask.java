@@ -11,7 +11,8 @@ import static io.botsteve.dependencyanalyzer.utils.JavaVersionResolver.resolveJa
 import static io.botsteve.dependencyanalyzer.utils.Utils.concatenateRepoNames;
 import static io.botsteve.dependencyanalyzer.utils.Utils.getPropertyFromSetting;
 import static io.botsteve.dependencyanalyzer.utils.Utils.getThirdPartyRepositoriesPath;
-
+import io.botsteve.dependencyanalyzer.utils.ToolchainsGenerator;
+import io.botsteve.dependencyanalyzer.utils.Utils;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -36,6 +37,8 @@ import lombok.EqualsAndHashCode;
 import org.eclipse.jgit.api.Git;
 import io.botsteve.dependencyanalyzer.exception.DependencyAnalyzerException;
 import io.botsteve.dependencyanalyzer.service.GradleDependencyAnalyzerService;
+import io.botsteve.dependencyanalyzer.utils.JavaVersionResolver;
+import io.botsteve.dependencyanalyzer.utils.LogUtils;
 import io.botsteve.dependencyanalyzer.utils.OperationStatus;
 import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
 import org.slf4j.Logger;
@@ -128,7 +131,7 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
     
     // Generate toolchains.xml before build
     try {
-        io.botsteve.dependencyanalyzer.utils.ToolchainsGenerator.generateToolchainsXml(io.botsteve.dependencyanalyzer.utils.Utils.loadSettings());
+        ToolchainsGenerator.generateToolchainsXml(Utils.loadSettings());
     } catch (Exception e) {
         log.warn("Failed to generate toolchains.xml, Maven builds might fail if exact JDKs are required.", e);
     }
@@ -301,7 +304,7 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
   }
 
   private void tryMavenBuildWithDifferentJdks(File repo) {
-    var jdks = new ArrayList<>(JDKS);
+    ArrayList<String> jdks = new ArrayList<>(JDKS);
     if (runMavenBuildWithDetectedJavaVersion(repo, jdks)) return;
 
     String currentJdkPath = System.getenv(JAVA_HOME);
@@ -327,8 +330,8 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
   }
 
   private boolean runMavenBuildWithDetectedJavaVersion(File repo, ArrayList<String> jdks) {
-    var javaVersionMaven = getJavaVersionMaven(repo);
-    var resolvedjdkPath = resolveJavaPathToBeUsed(javaVersionMaven);
+    String javaVersionMaven = getJavaVersionMaven(repo);
+    String resolvedjdkPath = resolveJavaPathToBeUsed(javaVersionMaven);
     try {
       runMavenBuild(repo, resolvedjdkPath);
       currentJavaVersionUsed = resolveJavaVersionToEnvProperty(javaVersionMaven);
@@ -351,13 +354,13 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
     // Try detecting the compatible Java version from the Gradle wrapper first
     String detectedJavaVersion = GradleDependencyAnalyzerService.detectJavaVersionFromGradleWrapper(repo);
     if (detectedJavaVersion != null) {
-      String detectedJdkPath = io.botsteve.dependencyanalyzer.utils.JavaVersionResolver.resolveJavaPathToBeUsed(detectedJavaVersion);
+      String detectedJdkPath = JavaVersionResolver.resolveJavaPathToBeUsed(detectedJavaVersion);
       if (detectedJdkPath != null && !detectedJdkPath.isEmpty()) {
         log.info("Detected compatible Java version {} for Gradle wrapper, trying JAVA_HOME={}", detectedJavaVersion, detectedJdkPath);
         try {
           runGradleBuild(repo, detectedJdkPath, GRADLE_STOP_COMMAND);
           runGradleBuild(repo, detectedJdkPath, GRADLE_COMMAND);
-          currentJavaVersionUsed = io.botsteve.dependencyanalyzer.utils.JavaVersionResolver.resolveJavaVersionToEnvProperty(detectedJavaVersion);
+          currentJavaVersionUsed = JavaVersionResolver.resolveJavaVersionToEnvProperty(detectedJavaVersion);
           return;
         } catch (Exception e) {
           if (isFatalError(e)) throw (RuntimeException) e;
@@ -416,7 +419,7 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
     if (exitCode == 0) {
       log.info("Gradle build successful for {}", repo.getName());
     } else {
-      throw new DependencyAnalyzerException(String.format("Build failed for %s. See log: %s", repo.getName(), io.botsteve.dependencyanalyzer.utils.LogUtils.getDefaultLogFilePath()));
+      throw new DependencyAnalyzerException(String.format("Build failed for %s. See log: %s", repo.getName(), LogUtils.getDefaultLogFilePath()));
     }
   }
 
@@ -443,7 +446,7 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
     }
   }
   private boolean isFatalError(Exception e) {
-      String msg = e.getMessage();
+    String msg = e.getMessage();
       if (msg == null) return false;
       return msg.contains("MAVEN_HOME") || 
              msg.contains("command not found") || 
@@ -483,7 +486,7 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
     if (exitCode == 0) {
       log.info("Ant build successful for {}", repo.getName());
     } else {
-      throw new DependencyAnalyzerException(String.format("Ant build failed for %s. See log: %s", repo.getName(), io.botsteve.dependencyanalyzer.utils.LogUtils.getDefaultLogFilePath()));
+      throw new DependencyAnalyzerException(String.format("Ant build failed for %s. See log: %s", repo.getName(), LogUtils.getDefaultLogFilePath()));
     }
   }
 

@@ -82,23 +82,11 @@ java -jar target/dependency-analyzer.jar
 
 ### 🛠️ Building Native Images
 
-This repository supports two native build strategies:
+This repository supports GluonFX native builds via the `gluonfx-native` profile.
 
-1. **Graal Native Maven Plugin (`native` profile)**
-2. **GluonFX Native (`gluonfx-native` profile)**
+Native builds use `io.botsteve.dependencyanalyzer.NativeEntryPoint` and require GraalVM JDK 21 with `native-image` installed.
 
-Both use `io.botsteve.dependencyanalyzer.NativeEntryPoint` and both require GraalVM JDK 21 with `native-image` installed.
-
-#### A) Graal Native (`-Pnative`)
-
-```bash
-GRAALVM_HOME=/path/to/graalvm mvn clean package -Pnative -DskipTests
-```
-
-Output binary:
-- `target/dependency-analyzer` (or `target/dependency-analyzer.exe` on Windows)
-
-#### B) Gluon Native (`-Pgluonfx-native`)
+#### Gluon Native (`-Pgluonfx-native`)
 
 ```bash
 GRAALVM_HOME=/path/to/graalvm mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build
@@ -112,6 +100,7 @@ Output binary (macOS host build):
 - Native metadata is maintained under:
   - `src/main/resources/META-INF/native-image`
   - `src/main/resources/META-INF/substrate/config`
+- Keep substrate metadata in strict JSON form and avoid empty platform-specific override files (for example `jniconfig-aarch64-darwin.json` as `[]`), because Gluon merge output can become invalid in CI.
 - These files provide reflection/JNI/resource configuration required for JavaFX, logging, and JGit-related native runtime paths.
 - In native runtime, dependency download uses a native-safe CLI git path to avoid JGit reflection pitfalls during clone/fetch/checkout.
 - You may still see JavaFX unnamed-module warnings during startup; these are expected for this packaging shape when stage startup succeeds.
@@ -425,7 +414,6 @@ Use these commands to validate the current implementation and packaging gates:
 mvn test
 mvn clean package
 mvn -B verify --file pom.xml
-GRAALVM_HOME=/path/to/graalvm mvn -Pnative -DskipTests package
 GRAALVM_HOME=/path/to/graalvm mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build
 ```
 
@@ -444,7 +432,6 @@ mvn -Dtest=TableViewComponentFilterTest,ColumnsComponentOutputPopupTest,Dependen
 
 GitHub Actions (`.github/workflows/maven.yml`) now runs:
 - Matrix JVM verification (`mvn -B verify --file pom.xml`) on Ubuntu, Windows, and macOS.
-- A dedicated macOS GraalVM native-image build (`mvn -B package -Pnative -DskipTests`) with binary artifact upload.
 - A dedicated macOS Gluon native build (`mvn -B -DskipTests -Pgluonfx-native -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build`) with binary artifact upload.
 
 Gluon CI resilience behavior:
