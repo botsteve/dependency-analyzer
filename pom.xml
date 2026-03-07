@@ -21,8 +21,9 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
 
-        <javafx.version>23.0.1</javafx.version>
-        <jackson.version>2.21.0</jackson.version>
+        <javafx.version>21.0.11-ea+2</javafx.version>
+        <javafx.static.sdk.version>21-ea+11.1</javafx.static.sdk.version>
+        <jackson.version>3.1.0</jackson.version>
         <maven.invoker.version>3.3.0</maven.invoker.version>
         <jgit.version>7.5.0.202512021534-r</jgit.version>
         <lombok.version>1.18.42</lombok.version>
@@ -54,9 +55,10 @@
         </dependency>
 
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
+            <scope>compile</scope>
         </dependency>
 
         <dependency>
@@ -277,7 +279,7 @@
                         <configuration>
                             <target>host</target>
                             <mainClass>io.botsteve.dependencyanalyzer.NativeEntryPoint</mainClass>
-                            <javafxStaticSdkVersion>${javafx.version}</javafxStaticSdkVersion>
+                            <javafxStaticSdkVersion>${javafx.static.sdk.version}</javafxStaticSdkVersion>
                             <resourcesList>
                                 <list>logback.xml</list>
                                 <list>META-INF/services/org.slf4j.spi.SLF4JServiceProvider</list>

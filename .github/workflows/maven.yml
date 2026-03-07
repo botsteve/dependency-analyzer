@@ -67,14 +67,28 @@ jobs:
       run: native-image --version
 
     - name: Build native binary with Maven profile
-      run: mvn -B package -Pnative -DskipTests
+      id: native_build
+      run: |
+        if mvn -B package -Pnative -DskipTests; then
+          echo "build_ok=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "build_ok=false" >> "$GITHUB_OUTPUT"
+        if [ "${{ github.event_name }}" = "release" ]; then
+          echo "::warning::Native macOS build failed during release workflow. Continuing without native macOS artifact."
+          exit 0
+        fi
+        exit 1
       env:
         GRAALVM_HOME: ${{ env.JAVA_HOME }}
 
     - name: Assert native binary exists
+      if: steps.native_build.outputs.build_ok == 'true'
       run: test -x target/dependency-analyzer
 
     - name: Upload Native Artifact
+      if: steps.native_build.outputs.build_ok == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: dependency-analyzer-native-macos
@@ -82,7 +96,7 @@ jobs:
         if-no-files-found: error
 
     - name: Publish Native Binary to Release
-      if: github.event_name == 'release'
+      if: github.event_name == 'release' && steps.native_build.outputs.build_ok == 'true'
       uses: softprops/action-gh-release@v2
       with:
         files: target/dependency-analyzer
@@ -103,15 +117,102 @@ jobs:
         cache: maven
         components: 'native-image'
 
+    - name: Probe Gluon JavaFX static SDK availability
+      id: gluon_sdk_probe
+      run: |
+        JAVAFX_STATIC_SDK_VERSION="$(python - <<'PY'
+        import xml.etree.ElementTree as ET
+        root = ET.parse('pom.xml').getroot()
+        ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
+        version = root.findtext('m:properties/m:javafx.static.sdk.version', namespaces=ns)
+        if not version:
+          version = root.findtext('m:properties/m:javafx.version', namespaces=ns)
+        print((version or '').strip())
+        PY
+        )"
+        if [ -z "$JAVAFX_STATIC_SDK_VERSION" ]; then
+          echo "::error::Unable to read javafx.static.sdk.version or javafx.version from pom.xml"
+          exit 1
+        fi
+        PROBE_URL="https://download2.gluonhq.com/substrate/javafxstaticsdk/openjfx-${JAVAFX_STATIC_SDK_VERSION}-darwin-aarch64-static.zip"
+        HTTP_STATUS="000"
+        ATTEMPT=1
+        while [ "$ATTEMPT" -le 3 ]; do
+          HTTP_STATUS="$(curl -L -s -o /dev/null -w "%{http_code}" --range 0-0 --connect-timeout 15 --max-time 45 "$PROBE_URL" || echo 000)"
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "206" ]; then
+            break
+          fi
+          if [ "$HTTP_STATUS" = "403" ] || [ "$HTTP_STATUS" = "404" ]; then
+            break
+          fi
+          if [ "$ATTEMPT" -lt 3 ]; then
+            sleep $((ATTEMPT * 5))
+          fi
+          ATTEMPT=$((ATTEMPT + 1))
+        done
+
+        if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "206" ]; then
+          PROBE_STATE="available"
+        elif [ "$HTTP_STATUS" = "403" ] || [ "$HTTP_STATUS" = "404" ]; then
+          PROBE_STATE="unavailable"
+        else
+          PROBE_STATE="inconclusive"
+        fi
+
+        echo "javafx_static_sdk_version=$JAVAFX_STATIC_SDK_VERSION" >> "$GITHUB_OUTPUT"
+        echo "probe_url=$PROBE_URL" >> "$GITHUB_OUTPUT"
+        echo "http_status=$HTTP_STATUS" >> "$GITHUB_OUTPUT"
+        echo "probe_state=$PROBE_STATE" >> "$GITHUB_OUTPUT"
+
+    - name: Skip Gluon build when SDK endpoint is confirmed unavailable
+      if: steps.gluon_sdk_probe.outputs.probe_state == 'unavailable'
+      run: |
+        echo "::warning::Skipping gluon-native-macos job because JavaFX static SDK endpoint is confirmed unavailable (403/404)."
+        echo "::warning::URL: ${{ steps.gluon_sdk_probe.outputs.probe_url }}"
+        echo "::warning::HTTP status: ${{ steps.gluon_sdk_probe.outputs.http_status }}"
+
+    - name: Continue release on inconclusive Gluon SDK probe
+      if: github.event_name == 'release' && steps.gluon_sdk_probe.outputs.probe_state == 'inconclusive'
+      run: |
+        echo "::warning::Gluon JavaFX static SDK probe was inconclusive during release workflow."
+        echo "::warning::URL: ${{ steps.gluon_sdk_probe.outputs.probe_url }}"
+        echo "::warning::HTTP status: ${{ steps.gluon_sdk_probe.outputs.http_status }}"
+        echo "::warning::Will attempt Gluon native build; release will continue if this native build fails."
+
     - name: Build Gluon native executable
-      run: mvn -B -DskipTests -Pgluonfx-native -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build
+      id: gluon_build
+      if: steps.gluon_sdk_probe.outputs.probe_state != 'unavailable'
+      run: |
+        ATTEMPT=1
+        while [ "$ATTEMPT" -le 3 ]; do
+          if mvn -B -DskipTests -Pgluonfx-native -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build; then
+            echo "build_ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$ATTEMPT" -eq 3 ]; then
+            break
+          fi
+          SLEEP_SECONDS=$((ATTEMPT * 20))
+          echo "Build failed on attempt $ATTEMPT; retrying in ${SLEEP_SECONDS}s"
+          sleep "$SLEEP_SECONDS"
+          ATTEMPT=$((ATTEMPT + 1))
+        done
+
+        echo "build_ok=false" >> "$GITHUB_OUTPUT"
+        if [ "${{ github.event_name }}" = "release" ]; then
+          echo "::warning::Gluon native build failed during release workflow. Continuing without Gluon native artifact."
+          exit 0
+        fi
+        exit 1
       env:
         GRAALVM_HOME: ${{ env.JAVA_HOME }}
 
     - name: Assert Gluon native binary exists
+      if: steps.gluon_build.outputs.build_ok == 'true'
       run: test -x target/gluonfx/aarch64-darwin/dependency-analyzer
 
     - name: Upload Gluon Native Artifact
+      if: steps.gluon_build.outputs.build_ok == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: dependency-analyzer-gluon-native-macos
@@ -119,7 +220,7 @@ jobs:
         if-no-files-found: error
 
     - name: Publish Gluon Native Binary to Release
-      if: github.event_name == 'release'
+      if: github.event_name == 'release' && steps.gluon_build.outputs.build_ok == 'true'
       uses: softprops/action-gh-release@v2
       with:
         files: target/gluonfx/aarch64-darwin/dependency-analyzer

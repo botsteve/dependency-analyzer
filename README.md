@@ -38,7 +38,7 @@ For deep implementation details, see the docs series:
 - [04 - JDK Bootstrap and Build Pipeline](docs/04-jdk-bootstrap-and-build-pipeline.md)
 - [05 - CI Workflows and Release Artifacts](docs/05-ci-workflows-and-release-artifacts.md)
 - [06 - JdkDownloadTask Deep Dive](docs/06-jdk-download-task-deep-dive.md)
-- [07 - Release Process (Reusable)](docs/07-release-process-2.0.0.md)
+- [07 - Release Process (Reusable)](docs/07-release-process.md)
 - [08 - Release Notes for v2.0.0](docs/08-release-notes-2.0.0.md)
 
 ---
@@ -446,6 +446,14 @@ GitHub Actions (`.github/workflows/maven.yml`) now runs:
 - Matrix JVM verification (`mvn -B verify --file pom.xml`) on Ubuntu, Windows, and macOS.
 - A dedicated macOS GraalVM native-image build (`mvn -B package -Pnative -DskipTests`) with binary artifact upload.
 - A dedicated macOS Gluon native build (`mvn -B -DskipTests -Pgluonfx-native -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build`) with binary artifact upload.
+
+Gluon CI resilience behavior:
+- Workflow preflights the Gluon JavaFX static SDK endpoint before running `gluonfx:build` using `javafx.static.sdk.version` (fallback: `javafx.version`).
+- If endpoint is confirmed unavailable (`403`/`404`), non-release runs are skipped with warnings.
+- If probe is inconclusive (timeouts/5xx/network), non-release runs still attempt build.
+- On release workflows, native jobs are best-effort: build failures log warnings and release continues.
+- Native artifacts are published only when their corresponding native build succeeds.
+- When available, Gluon build step retries up to 3 attempts with incremental backoff.
 
 ## 🤖 Agent Development Guide
 

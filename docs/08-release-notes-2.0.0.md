@@ -18,7 +18,7 @@ Welcome to **v2.0.0**! This release is a major step forward for runtime stabilit
 - 🆕 Added **`JdkDownloadTask`** for managed JDK bootstrap (`JAVA8_HOME`, `JAVA11_HOME`, `JAVA17_HOME`, `JAVA21_HOME`).
 - 🧭 Added **`NativeEntryPoint`** for native startup path support.
 - 📦 Expanded native metadata (JNI/reflection/resources) for improved runtime compatibility.
-- 📚 Added deep-dive docs series (`docs/01` through `docs/07`) plus this release note.
+- 📚 Added deep-dive docs series (`docs/01` through `docs/07`, including `docs/07-release-process.md`) plus this release note.
 - 🧪 Added regression coverage for:
   - downloader status and retry behavior,
   - JDK download resolution,
