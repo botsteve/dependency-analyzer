@@ -4,6 +4,7 @@ import static io.botsteve.dependencyanalyzer.service.MavenInvokerService.getMave
 
 import java.io.File;
 import java.util.List;
+import io.botsteve.dependencyanalyzer.model.CollectingOutputHandler;
 import io.botsteve.dependencyanalyzer.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,9 +36,9 @@ public class DependencyTreeAnalyzerService {
    */
   public static String runMavenDependencyTree(String projectDir, String moduleDir) {
     log.info("Running Maven dependency:tree for module '{}' in {}", moduleDir.isEmpty() ? "(root)" : moduleDir, projectDir);
-    var outputHandler = getMavenInvokerResult(projectDir, moduleDir,
-                                              "org.apache.maven.plugins:maven-dependency-plugin:3.7.0:tree",
-                                              "-DoutputType=json", System.getenv("JAVA_HOME"));
+    CollectingOutputHandler outputHandler = getMavenInvokerResult(projectDir, moduleDir,
+        "org.apache.maven.plugins:maven-dependency-plugin:3.7.0:tree",
+        "-DoutputType=json", System.getenv("JAVA_HOME"));
     List<String> outputLines = outputHandler.getOutput();
     log.info("Maven dependency:tree produced {} output lines for module '{}'", outputLines.size(), moduleDir.isEmpty() ? "(root)" : moduleDir);
     String json = extractJsonFromMavenOutput(outputLines);

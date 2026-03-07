@@ -10,18 +10,24 @@ import static io.botsteve.dependencyanalyzer.utils.Utils.getMissingOrInvalidJdkS
 import static io.botsteve.dependencyanalyzer.utils.Utils.getThirdPartyRepositoriesPath;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.concurrent.Task;
 import javafx.scene.control.Alert;
 import javafx.collections.FXCollections;
@@ -38,6 +44,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
+import io.botsteve.dependencyanalyzer.model.ProjectType;
 import io.botsteve.dependencyanalyzer.tasks.BuildRepositoriesTask;
 import io.botsteve.dependencyanalyzer.tasks.DependencyDownloaderTask;
 import io.botsteve.dependencyanalyzer.tasks.DependencyLoadingTask;
@@ -54,8 +61,8 @@ public class ButtonsComponent {
   private static final Logger log = LoggerFactory.getLogger(ButtonsComponent.class);
 
   private static AtomicBoolean isDownloaded = new AtomicBoolean(false);
-  private final javafx.beans.property.BooleanProperty isTaskRunning = new javafx.beans.property.SimpleBooleanProperty(false);
-  private final javafx.beans.property.BooleanProperty isJdkDownloadRunning = new javafx.beans.property.SimpleBooleanProperty(false);
+  private final BooleanProperty isTaskRunning = new SimpleBooleanProperty(false);
+  private final BooleanProperty isJdkDownloadRunning = new SimpleBooleanProperty(false);
   private final TableViewComponent tableViewComponent;
   private Task<?> activeTask;
 
@@ -67,12 +74,12 @@ public class ButtonsComponent {
    * Builds the main application toolbar and wires task-state gating for all actions.
    */
   public ToolBar getToolBar(Stage primaryStage, ProgressBar progressBar, Label progressLabel) {
-    var openButton = createOpenDirectoryButton(primaryStage, progressBar, progressLabel);
-    var downloadThirdPartyButton = createDownloadThirdPartyButton(progressBar, progressLabel);
-    var downloadFourthPartyButton = createDownloadFourthPartyButton(progressBar, progressLabel);
-    var downloadJdksButton = createDownloadRequiredJdksButton(progressBar, progressLabel);
-    var buildSelectedButton = createBuildSelectedButton(progressBar, progressLabel);
-    var buildAggregatedLicenseButton = createBuildAggregatedLicenseButton(progressBar, progressLabel);
+    Button openButton = createOpenDirectoryButton(primaryStage, progressBar, progressLabel);
+    Button downloadThirdPartyButton = createDownloadThirdPartyButton(progressBar, progressLabel);
+    Button downloadFourthPartyButton = createDownloadFourthPartyButton(progressBar, progressLabel);
+    Button downloadJdksButton = createDownloadRequiredJdksButton(progressBar, progressLabel);
+    Button buildSelectedButton = createBuildSelectedButton(progressBar, progressLabel);
+    Button buildAggregatedLicenseButton = createBuildAggregatedLicenseButton(progressBar, progressLabel);
 
     openButton.setTooltip(new Tooltip("Open a Maven/Gradle project directory and load dependencies"));
     downloadThirdPartyButton.setTooltip(new Tooltip("Download selected direct 3rd-party dependencies"));
@@ -104,7 +111,7 @@ public class ButtonsComponent {
   /**
    * Exposes read-only state used to disable conflicting UI actions during JDK bootstrap.
    */
-  public javafx.beans.property.ReadOnlyBooleanProperty jdkDownloadRunningProperty() {
+  public ReadOnlyBooleanProperty jdkDownloadRunningProperty() {
     return isJdkDownloadRunning;
   }
 
@@ -176,13 +183,13 @@ public class ButtonsComponent {
       }
 
       DependencyDownloaderTask task = new DependencyDownloaderTask(downloadRequests,
-                                                                   progressBar,
-                                                                   progressLabel,
-                                                                   tableViewComponent.getCleanUpCheckBox().isSelected(),
-                                                                   tableViewComponent.getProjectName());
+          progressBar,
+          progressLabel,
+          tableViewComponent.getCleanUpCheckBox().isSelected(),
+          tableViewComponent.getProjectName());
       runManagedTask(task, progressBar, progressLabel, () -> {
         isDownloaded.set(true);
-        var versionToCheckoutTag = task.getValue();
+        Map<String, String> versionToCheckoutTag = task.getValue();
         forthParty.forEach(dependencyNode -> {
           Set<String> repoKeys = dependencyToRepoKeys.getOrDefault(dependencyNode, Set.of());
           String checkoutTag = resolveBestStatus(versionToCheckoutTag, repoKeys);
@@ -198,7 +205,7 @@ public class ButtonsComponent {
 
   private void collectChildrenRecursively(DependencyNode node, Set<DependencyNode> out) {
     if (node == null || node.getChildren() == null) return;
-    for (var child : node.getChildren()) {
+    for (DependencyNode child : node.getChildren()) {
       if (child == null) continue;
       out.add(child);
       collectChildrenRecursively(child, out);
@@ -224,17 +231,17 @@ public class ButtonsComponent {
       File out = fileChooser.showSaveDialog(buildButton.getScene() == null ? null : buildButton.getScene().getWindow());
       if (out == null) return;
 
-      Set<io.botsteve.dependencyanalyzer.model.DependencyNode> selectedSnapshot =
-          new java.util.LinkedHashSet<>(tableViewComponent.getSelectedDependencies());
+      Set<DependencyNode> selectedSnapshot =
+          new LinkedHashSet<>(tableViewComponent.getSelectedDependencies());
 
-      javafx.concurrent.Task<Void> task = new javafx.concurrent.Task<>() {
+      Task<Void> task = new Task<>() {
         @Override
         protected Void call() throws Exception {
           updateProgress(0, 1);
           updateMessage("Building license report...");
-          var service = new LicenseAggregationService(tableViewComponent.getProjectName());
+          LicenseAggregationService service = new LicenseAggregationService(tableViewComponent.getProjectName());
           String report = service.generatePublicLicenseReport(selectedSnapshot);
-          java.nio.file.Files.writeString(out.toPath(), report, java.nio.charset.StandardCharsets.UTF_8);
+          Files.writeString(out.toPath(), report, StandardCharsets.UTF_8);
           return null;
         }
       };
@@ -264,14 +271,14 @@ public class ButtonsComponent {
           .map(DependencyNode::getScmUrl)
           .filter(Objects::nonNull)
           .filter(url -> !url.isBlank())
-          .collect(java.util.stream.Collectors.toSet());
+          .collect(Collectors.toSet());
 
       BuildRepositoriesTask task = new BuildRepositoriesTask(progressBar, progressLabel, tableViewComponent.getProjectName(), selectedRepoNames);
       runManagedTask(task, progressBar, progressLabel, () -> {
-        var successfulBuiltReposToJavaVersion = task.getValue();
+        Map<String, String> successfulBuiltReposToJavaVersion = task.getValue();
         selectedThirdParty
             .forEach(dependencyNode -> {
-              String buildStatus = resolveBuildStatusForDependency(successfulBuiltReposToJavaVersion, dependencyNode);
+          String buildStatus = resolveBuildStatusForDependency(successfulBuiltReposToJavaVersion, dependencyNode);
               if (buildStatus != null && !buildStatus.isBlank()) {
                 dependencyNode.setBuildWith(buildStatus);
               }
@@ -291,7 +298,7 @@ public class ButtonsComponent {
     downloadButton.setOnAction(event -> {
       Set<DependencyNode> selectedThirdParty = getSelectedThirdPartyDependencies();
       Set<DependencyNode> downloadableThirdParty = filterDownloadableDependencies(selectedThirdParty);
-      var urlToVersion = collectLatestVersions(downloadableThirdParty);
+      Map<String, String> urlToVersion = collectLatestVersions(downloadableThirdParty);
       if (urlToVersion.isEmpty()) {
         Platform.runLater(() -> showError("No 3rd-party dependencies with valid SCM URL selected!"));
         return;
@@ -310,15 +317,15 @@ public class ButtonsComponent {
       });
 
       DependencyDownloaderTask task = new DependencyDownloaderTask(urlToVersion,
-                                                                   progressBar,
-                                                                   progressLabel,
-                                                                   tableViewComponent.getCleanUpCheckBox().isSelected(),
-                                                                   tableViewComponent.getProjectName(),
-                                                                   targetDirectories,
-                                                                   fallbackRepoNames);
+          progressBar,
+          progressLabel,
+          tableViewComponent.getCleanUpCheckBox().isSelected(),
+          tableViewComponent.getProjectName(),
+          targetDirectories,
+          fallbackRepoNames);
       runManagedTask(task, progressBar, progressLabel, () -> {
         isDownloaded.set(true);
-        var versionToCheckoutTag = task.getValue();
+        Map<String, String> versionToCheckoutTag = task.getValue();
         selectedThirdParty.forEach(dependencyNode -> {
           String repoKey = buildRepoKey(thirdPartyDirectory, dependencyNode.getScmUrl(), dependencyNode.getArtifactId());
           String checkoutTag = versionToCheckoutTag.get(repoKey);
@@ -354,7 +361,7 @@ public class ButtonsComponent {
   public Button createOpenDirectoryButton(Stage primaryStage, ProgressBar progressBar, Label progressLabel) {
     Button openButton = new Button("Open Directory");
     openButton.setOnAction(event -> {
-      var javaHome = System.getenv("JAVA_HOME");
+      String javaHome = System.getenv("JAVA_HOME");
       if (javaHome == null || javaHome.isEmpty()) {
         showError("JAVA_HOME environment variable is not configured, please configure and try again!");
         return;
@@ -362,16 +369,16 @@ public class ButtonsComponent {
       DirectoryChooser directoryChooser = new DirectoryChooser();
       File selectedDirectory = directoryChooser.showDialog(primaryStage);
       if (selectedDirectory != null) {
-        var projectType = io.botsteve.dependencyanalyzer.model.ProjectType.detect(selectedDirectory);
-        if (projectType == io.botsteve.dependencyanalyzer.model.ProjectType.UNKNOWN) {
+        ProjectType projectType = ProjectType.detect(selectedDirectory);
+        if (projectType == ProjectType.UNKNOWN) {
           getErrorAlertAndCloseProgressBar(
               "No recognizable build file found!\n" +
               "Please open the root directory of a Maven (pom.xml) or Gradle (build.gradle) project.",
               progressBar, progressLabel);
           return;
         }
-        if (projectType == io.botsteve.dependencyanalyzer.model.ProjectType.MAVEN) {
-          var mavenHome = System.getenv("MAVEN_HOME");
+        if (projectType == ProjectType.MAVEN) {
+          String mavenHome = System.getenv("MAVEN_HOME");
           if (mavenHome == null || mavenHome.isEmpty()) {
             showError("MAVEN_HOME environment variable is not configured. It is required for Maven projects.");
             return;
@@ -382,8 +389,8 @@ public class ButtonsComponent {
         tableViewComponent.setProjectName(selectedDirectory.getName());
         progressLabel.setText("Loading " + projectType.name().toLowerCase() + " dependencies...");
 
-        var task = new DependencyLoadingTask(selectedDirectory.getPath(), progressBar, progressLabel,
-                                             tableViewComponent.getTreeTableView());
+        DependencyLoadingTask task = new DependencyLoadingTask(selectedDirectory.getPath(), progressBar, progressLabel,
+            tableViewComponent.getTreeTableView());
 
         runManagedTask(task, progressBar, progressLabel, () -> {
           tableViewComponent.setAllDependencies(FXCollections.observableSet(task.getValue()));
@@ -448,7 +455,7 @@ public class ButtonsComponent {
    * Returns whether current host architecture is ARM/aarch64.
    */
   static boolean isArmHostArchitecture() {
-    String arch = System.getProperty("os.arch", "").toLowerCase(java.util.Locale.ROOT);
+    String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
     return arch.contains("arm") || arch.contains("aarch64");
   }
 
@@ -581,7 +588,7 @@ public class ButtonsComponent {
                               ProgressBar progressBar,
                               Label progressLabel,
                               Runnable onSuccess) {
-    final boolean jdkTask = task instanceof JdkDownloadTask;
+    boolean jdkTask = task instanceof JdkDownloadTask;
     progressBar.progressProperty().unbind();
     progressLabel.textProperty().unbind();
     if (activeTask != null) {

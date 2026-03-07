@@ -60,8 +60,8 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
   private final Label progressLabel;
   private final boolean cleanUp;
   private final String projectName;
-  private final java.util.concurrent.ConcurrentHashMap<String, String> repoToCheckoutTag = new java.util.concurrent.ConcurrentHashMap<>();
-  private final java.util.concurrent.ConcurrentHashMap<String, String> failedDownloads = new java.util.concurrent.ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, String> repoToCheckoutTag = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, String> failedDownloads = new ConcurrentHashMap<>();
 
   /**
    * Immutable download request descriptor for one dependency repository.
@@ -211,7 +211,7 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
     downloadRequests.parallelStream().forEach(request -> {
       String scmUrl = request.scmUrl();
       String resolvedRepoName = resolveRepoDirectoryName(scmUrl, request.fallbackRepoName());
-      final String repoName = resolvedRepoName;
+      String repoName = resolvedRepoName;
       String repoKey = buildRepoKey(request.targetDirectory(), repoName);
       String operationId = OperationStatus.createOperationId("DL");
       long startNanos = System.nanoTime();

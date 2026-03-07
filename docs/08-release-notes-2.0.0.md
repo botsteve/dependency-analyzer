@@ -4,6 +4,22 @@ Welcome to **v2.0.0**! This release is a major step forward for runtime stabilit
 
 ---
 
+## 🧹 Post-release maintenance update (`2.0.1-SNAPSHOT`)
+
+This branch now includes a broad code hygiene refactor focused on readability and consistency, while preserving behavior.
+
+- Removed unused/local-noise constructs across the Java codebase.
+- Standardized method-local declarations to avoid `var` and method-local `final` variables.
+- Replaced fully-qualified local JavaFX type declarations with imported type names (for example, `ContextMenu` instead of `javafx.scene.control.ContextMenu`).
+- Kept runtime behavior stable and re-validated the full build pipeline.
+
+Validation for this maintenance update:
+
+- `mvn -B test` ✅ (76 tests, 0 failures)
+- `mvn -B -DskipTests clean package` ✅
+
+---
+
 ## 🌟 At a glance (from `1.0.0` → `2.0.0`)
 
 - **7 commits** in the release range

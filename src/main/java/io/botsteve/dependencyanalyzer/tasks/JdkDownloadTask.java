@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import javafx.concurrent.Task;
@@ -110,7 +111,7 @@ public class JdkDownloadTask extends Task<Map<String, String>> {
     updateOverallProgress(0, totalJdks, 0.0, "Preparing JDK downloads...");
 
     for (String settingKey : effectiveSettings) {
-      final int currentIndex = step;
+      int currentIndex = step;
       int version = toJdkVersion(settingKey);
       String downloadArch = resolveDownloadArchitecture(version, hostArch);
       String startMessage = buildDownloadMessage(version, os, downloadArch, hostArch);
@@ -349,7 +350,7 @@ public class JdkDownloadTask extends Task<Map<String, String>> {
                                         StageProgress stageProgress) throws IOException {
     ensureDirectory(archivePath.getParent());
 
-    final byte[] buffer = new byte[64 * 1024];
+    byte[] buffer = new byte[64 * 1024];
     long downloaded = 0L;
     int lastReportedPercent = -1;
     int lastLoggedBucket = -1;
@@ -552,7 +553,7 @@ public class JdkDownloadTask extends Task<Map<String, String>> {
 
   static Path resolveJavaHome(Path installRoot) {
     String executable = isWindowsHost() ? "java.exe" : "java";
-    try (var stream = Files.walk(installRoot, 10)) {
+    try (Stream<Path> stream = Files.walk(installRoot, 10)) {
       return stream
           .filter(Files::isRegularFile)
           .filter(path -> executable.equals(path.getFileName().toString()))

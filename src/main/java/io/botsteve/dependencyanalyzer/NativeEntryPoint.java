@@ -42,7 +42,7 @@ public class NativeEntryPoint extends Application {
         });
         startupProbe("NativeEntryPoint.main entered");
         startupProbe("Log file: " + getDefaultLogFilePath());
-        Logger log = LoggerFactory.getLogger(NativeEntryPoint.class);
+      Logger log = LoggerFactory.getLogger(NativeEntryPoint.class);
         log.info("Starting native JavaFX entry point");
         launch(NativeEntryPoint.class, args);
     }
@@ -70,7 +70,7 @@ public class NativeEntryPoint extends Application {
     }
 
     private static void startupProbe(String message) {
-        String line = "[startup] " + message + System.lineSeparator();
+      String line = "[startup] " + message + System.lineSeparator();
         System.err.print(line);
         try {
             Files.writeString(STARTUP_TRACE_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -80,13 +80,13 @@ public class NativeEntryPoint extends Application {
     }
 
     private static void configureSlf4jProvider() {
-        String simpleProvider = "org.slf4j.simple.SimpleServiceProvider";
+      String simpleProvider = "org.slf4j.simple.SimpleServiceProvider";
         if (classExists(simpleProvider)) {
             System.setProperty("slf4j.provider", simpleProvider);
             startupProbe("SLF4J provider forced to " + simpleProvider);
             return;
         }
-        String logbackProvider = "ch.qos.logback.classic.spi.LogbackServiceProvider";
+      String logbackProvider = "ch.qos.logback.classic.spi.LogbackServiceProvider";
         System.setProperty("slf4j.provider", logbackProvider);
         startupProbe("SLF4J provider forced to " + logbackProvider);
     }

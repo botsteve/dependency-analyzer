@@ -50,7 +50,7 @@ public class DependencyLoadingTask extends Task<Set<DependencyNode>> {
   @Override
   protected Set<DependencyNode> call() throws Exception {
     updateMessage("Loading dependencies...");
-    var dependencies = DependencyAnalyzerService.getDependencies(projectDir);
+    Set<DependencyNode> dependencies = DependencyAnalyzerService.getDependencies(projectDir);
 
     updateMessage("Fetching and Enriching SCM URLs...");
     ProjectType projectType = DependencyAnalyzerService.getProjectType(projectDir);
@@ -94,10 +94,10 @@ public class DependencyLoadingTask extends Task<Set<DependencyNode>> {
       ProjectType projectType = DependencyAnalyzerService.getProjectType(projectDir);
       String errorMsg = projectType == ProjectType.GRADLE
           ? "Failed to analyze Gradle project. Make sure the project compiles " +
-            "and Gradle Wrapper (gradlew) or system Gradle is available.\n" +
-            "Error: " + exception.getMessage()
+          "and Gradle Wrapper (gradlew) or system Gradle is available.\n" +
+          "Error: " + exception.getMessage()
           : "Make sure the maven project compiles and has a error-free root pom.xml.\n" +
-            "If you are behind a proxy, check maven proxy in ~/.m2/settings.xml.";
+          "If you are behind a proxy, check maven proxy in ~/.m2/settings.xml.";
       getErrorAlertAndCloseProgressBar(errorMsg, progressBar, progressLabel);
     }
   }

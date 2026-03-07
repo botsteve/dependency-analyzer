@@ -3,6 +3,8 @@ package io.botsteve.dependencyanalyzer.utils;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -185,7 +187,7 @@ public final class ScmUrlUtils {
     }
 
     String[] rawSegments = path.split("/");
-    java.util.List<String> segments = new java.util.ArrayList<>();
+    List<String> segments = new ArrayList<>();
     for (String rawSegment : rawSegments) {
       String segment = trimGitAndTrailingSlash(rawSegment);
       if (!segment.isBlank()) {

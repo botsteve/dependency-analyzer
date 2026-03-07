@@ -60,7 +60,7 @@ public class CheckoutTagsTask {
         checkoutTag(git, tagToCheckout);
         return tagToCheckout.getName();
       } else {
-        var depViewerException = new DependencyAnalyzerException(String.format(NO_TAG_FOUND, file.getName(), version));
+        DependencyAnalyzerException depViewerException = new DependencyAnalyzerException(String.format(NO_TAG_FOUND, file.getName(), version));
         log.error("No tags found matching the pattern.", depViewerException);
         throw depViewerException;
       }
@@ -75,10 +75,10 @@ public class CheckoutTagsTask {
   }
 
   private static boolean isMatchingVersionTag(String version, Ref tag) {
-    var strippedTag = tag.getName().replace("refs/tags/", "").toLowerCase();
+    String strippedTag = tag.getName().replace("refs/tags/", "").toLowerCase();
     boolean match = versionsMatch(version, strippedTag);
-    var normalizedTag = normalizeVersion(strippedTag);
-    var normalizedVersion = normalizeVersion(version);
+    String normalizedTag = normalizeVersion(strippedTag);
+    String normalizedVersion = normalizeVersion(version);
     log.debug("Tag '{}' normalized to '{}' for requested version '{}' normalized to '{}' => match={} ",
         tag.getName(), normalizedTag, version, normalizedVersion, match);
     return match;
@@ -120,7 +120,7 @@ public class CheckoutTagsTask {
       try (RevWalk walk = new RevWalk(git.getRepository())) {
         ObjectId objectId = resolveObjectId(tag);
         RevCommit commit = walk.parseCommit(objectId);
-        return commit.getCommitterIdent().getWhen();
+        return Date.from(commit.getCommitterIdent().getWhenAsInstant());
       }
     }
 

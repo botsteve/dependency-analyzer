@@ -2,6 +2,7 @@ package io.botsteve.dependencyanalyzer.components;
 
 
 
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -28,10 +29,10 @@ public class ProgressBoxComponent {
     
     progressBar.managedProperty().bind(progressBar.visibleProperty());
     progressLabel.managedProperty().bind(progressLabel.visibleProperty());
-    
+
     VBox progressBox = new VBox(5, progressLabel, progressBar);
     progressBox.setAlignment(Pos.CENTER);
-    progressBox.setPadding(new javafx.geometry.Insets(10, 20, 10, 20));
+    progressBox.setPadding(new Insets(10, 20, 10, 20));
     progressBox.setMaxWidth(Double.MAX_VALUE);
     progressBox.prefWidthProperty().bind(scene.widthProperty());
 

@@ -99,7 +99,7 @@ public class ForceDeleteUtil {
     }
 
     private static void forceDeletePosix(Path path) throws IOException {
-        Set<PosixFilePermission> permissions = EnumSet.allOf(PosixFilePermission.class);
+      Set<PosixFilePermission> permissions = EnumSet.allOf(PosixFilePermission.class);
         Files.setPosixFilePermissions(path, permissions);
     }
 
@@ -110,7 +110,7 @@ public class ForceDeleteUtil {
         } else {
             pb = new ProcessBuilder("rm", "-f", path.toString());
         }
-        Process process = pb.start();
+      Process process = pb.start();
         if (!process.waitFor(5, TimeUnit.SECONDS) || process.exitValue() != 0) {
             throw new IOException("External process failed to delete: " + path);
         }

@@ -5,7 +5,8 @@ import static io.botsteve.dependencyanalyzer.service.DependencyTreeAnalyzerServi
 import static io.botsteve.dependencyanalyzer.service.DependencyTreeAnalyzerService.runMavenDependencyTree;
 import static io.botsteve.dependencyanalyzer.utils.Utils.getProjectName;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.botsteve.dependencyanalyzer.exception.DependencyAnalyzerException;
+import tools.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,7 +34,7 @@ public class DependencyAnalyzerService {
     return switch (projectType) {
       case MAVEN -> getMavenDependencies(projectDir);
       case GRADLE -> GradleDependencyAnalyzerService.getDependencies(projectDir);
-      default -> throw new io.botsteve.dependencyanalyzer.exception.DependencyAnalyzerException(
+      default -> throw new DependencyAnalyzerException(
           "No recognizable build file found (pom.xml, build.gradle, settings.gradle). " +
           "Please open the root directory of a Maven or Gradle project.");
     };
@@ -56,7 +57,7 @@ public class DependencyAnalyzerService {
   private static Set<DependencyNode> getMavenDependencies(String projectDir) throws Exception {
     List<String> modules = getModules(projectDir);
     ObjectMapper objectMapper = new ObjectMapper();
-    var rootDependencies = objectMapper.readValue(runMavenDependencyTree(projectDir, ""), DependencyNode.class);
+    DependencyNode rootDependencies = objectMapper.readValue(runMavenDependencyTree(projectDir, ""), DependencyNode.class);
     moduleToDependencyNode.put(getProjectName(new File(projectDir, "pom.xml")), rootDependencies);
     Set<DependencyNode> totalDependencies = new HashSet<>(new HashSet<>(rootDependencies.getChildren()));
 

@@ -19,7 +19,7 @@ public class ContextMenuComponent {
 
   public ContextMenu createContextMenu() {
     ContextMenu contextMenu = new ContextMenu();
-    var copyMenuItem = createCopyContextMenuItem();
+    MenuItem copyMenuItem = createCopyContextMenuItem();
     contextMenu.getItems().add(copyMenuItem);
     return contextMenu;
   }

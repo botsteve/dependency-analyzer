@@ -24,8 +24,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.botsteve.dependencyanalyzer.exception.DependencyAnalyzerException;
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
 import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
@@ -284,7 +284,7 @@ public class GradleDependencyAnalyzerService {
   private static void executeCycloneDxBom(String gradleCmd, File projectDir,
       String javaHome, Path initScript) throws Exception {
 
-    var command = new ArrayList<String>();
+    ArrayList<String> command = new ArrayList<>();
     command.add(gradleCmd);
     command.add("cyclonedxBom");
     command.add("--init-script");
@@ -327,9 +327,9 @@ public class GradleDependencyAnalyzerService {
 
     if (components != null && components.isArray()) {
       for (JsonNode component : components) {
-        String groupId = component.path("group").asText(null);
-        String artifactId = component.path("name").asText(null);
-        String version = component.path("version").asText(null);
+        String groupId = component.path("group").asString(null);
+        String artifactId = component.path("name").asString(null);
+        String version = component.path("version").asString(null);
 
         if (groupId == null || artifactId == null) continue;
 
@@ -352,9 +352,9 @@ public class GradleDependencyAnalyzerService {
     JsonNode properties = component.path("properties");
     if (properties.isArray()) {
       for (JsonNode prop : properties) {
-        String name = prop.path("name").asText("");
+        String name = prop.path("name").asString("");
         if ("gradle:configuration".equals(name) || "gradle:configurations".equals(name)) {
-          String value = prop.path("value").asText("");
+          String value = prop.path("value").asString("");
           if (!value.isEmpty()) {
             // If multiple configurations, take the first one or most important
             String firstConfig = value.contains(",") ? value.split(",")[0].trim() : value;
@@ -365,7 +365,7 @@ public class GradleDependencyAnalyzerService {
     }
 
     // 2. Fallback to standard CycloneDX scope
-    String scope = component.path("scope").asText(null);
+    String scope = component.path("scope").asString(null);
     if (scope != null && !scope.isEmpty()) {
       return switch (scope.toLowerCase()) {
         case "required" -> "implementation";
@@ -383,8 +383,8 @@ public class GradleDependencyAnalyzerService {
     JsonNode externalReferences = component.path("externalReferences");
     if (externalReferences.isArray()) {
       for (JsonNode ref : externalReferences) {
-        if ("vcs".equals(ref.path("type").asText())) {
-          String url = ref.path("url").asText("");
+        if ("vcs".equals(ref.path("type").asString())) {
+          String url = ref.path("url").asString("");
           if (!url.isEmpty()) {
             return fixNonResolvableScmRepositorise(
                 ScmUrlUtils.canonicalize(url), groupId, artifactId);
@@ -408,7 +408,7 @@ public class GradleDependencyAnalyzerService {
     }
 
     Map<String, DependencyNode> merged = new LinkedHashMap<>();
-    for (var entry : configToDeps.entrySet()) {
+    for (Map.Entry<String, Set<DependencyNode>> entry : configToDeps.entrySet()) {
       for (DependencyNode node : entry.getValue()) {
         String key = node.getGroupId() + ":" + node.getArtifactId() + ":" + node.getVersion();
         if (!merged.containsKey(key)) {
@@ -444,7 +444,7 @@ public class GradleDependencyAnalyzerService {
 
   private static List<String> detectSubprojects(String gradleCmd, File projectDir, String javaHome) {
     try {
-      var command = List.of(gradleCmd, "projects", "--quiet", "--console=plain");
+      List<String> command = List.of(gradleCmd, "projects", "--quiet", "--console=plain");
       log.info("Detecting subprojects: {} in {}", String.join(" ", command), projectDir);
 
       ProcessBuilder pb = new ProcessBuilder(command);
@@ -479,7 +479,7 @@ public class GradleDependencyAnalyzerService {
   private static Map<String, Set<DependencyNode>> executeGradleDependencies(String gradleCmd, File projectDir, String javaHome) throws Exception {
     List<String> subprojects = detectSubprojects(gradleCmd, projectDir, javaHome);
 
-    var command = new ArrayList<String>();
+    ArrayList<String> command = new ArrayList<>();
     command.add(gradleCmd);
 
     if (subprojects.isEmpty()) {
@@ -527,7 +527,7 @@ public class GradleDependencyAnalyzerService {
     Map<String, Set<DependencyNode>> result = new LinkedHashMap<>();
     String currentConfig = null;
     String currentProject = "";
-    var currentLines = new ArrayList<String>();
+    ArrayList<String> currentLines = new ArrayList<>();
 
     String line;
     while ((line = reader.readLine()) != null) {

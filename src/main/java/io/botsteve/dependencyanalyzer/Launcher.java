@@ -45,7 +45,7 @@ public class Launcher {
      * @param message probe message
      */
     private static void startupProbe(String message) {
-        String line = "[startup] " + message + System.lineSeparator();
+      String line = "[startup] " + message + System.lineSeparator();
         System.err.print(line);
         try {
             Files.writeString(STARTUP_TRACE_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
