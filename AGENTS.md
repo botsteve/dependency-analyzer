@@ -10,7 +10,7 @@ Use this file as the source of truth for commands, coding style, and validation.
 - Packaging: shaded runnable JAR via `maven-shade-plugin`
 - Tests: JUnit 5 + Mockito
 - Logging: SLF4J + Logback
-- Native build: GraalVM `native-maven-plugin` under profile `native`
+- Native build: GraalVM `native-maven-plugin` (`native`) and GluonFX (`gluonfx-native`)
 
 ## Build / test / run commands (authoritative)
 
@@ -41,6 +41,19 @@ These forms are confirmed by existing repository docs and test usage.
 ### Native image build
 
 - `GRAALVM_HOME=/path/to/graalvm mvn clean package -Pnative -DskipTests`
+- `GRAALVM_HOME=/path/to/graalvm mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build`
+
+Native profile details (current baseline):
+
+- Uses `native-maven-plugin` and GraalVM reachability metadata repository support for dependency metadata
+- Imports JavaFX substrate reflection/JNI metadata resources via native-image build args
+- Includes JavaFX toolkit runtime initialization for native mode (`com.sun.javafx.tk.quantum.QuantumToolkit`, `com.sun.glass.ui.Application`)
+
+Gluon profile details (current baseline):
+
+- Uses `com.gluonhq:gluonfx-maven-plugin` with `NativeEntryPoint`
+- Builds host native image to `target/gluonfx/aarch64-darwin/dependency-analyzer` on macOS
+- Loads additional substrate metadata from `src/main/resources/META-INF/substrate/config`
 
 Prerequisites:
 
@@ -49,6 +62,8 @@ Prerequisites:
 - Keep native metadata in sync:
   - `src/main/resources/META-INF/native-image/reflect-config.json`
   - `src/main/resources/META-INF/native-image/resource-config.json`
+  - `src/main/resources/META-INF/substrate/config/reflectionconfig.json`
+  - `src/main/resources/META-INF/substrate/config/resourceconfig.json`
 
 ## Lint / formatting reality
 
@@ -101,9 +116,9 @@ If any of these files are added, treat them as mandatory and merge their rules i
 
 ### Lombok usage
 
-- Lombok is actively used (`@Data`, `@Slf4j`).
-- Continue adjacent-file Lombok patterns instead of replacing with boilerplate.
-- Add explicit methods only when behavior differs from Lombok defaults.
+- Lombok is used in selected model/util classes (for example `@Data`).
+- Prefer explicit `Logger` fields in runtime-critical/native-sensitive classes instead of relying on generated logger fields.
+- Continue adjacent-file Lombok patterns instead of broad refactors.
 
 ### Naming conventions
 

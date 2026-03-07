@@ -24,12 +24,13 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.botsteve.dependencyanalyzer.exception.DependencyAnalyzerException;
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
 import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Analyzes dependencies for Gradle projects.
@@ -41,8 +42,9 @@ import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
  * falls back to parsing `gradle dependencies` text output. SCM URLs are then
  * fetched separately from Maven Central POMs.
  */
-@Slf4j
 public class GradleDependencyAnalyzerService {
+
+  private static final Logger log = LoggerFactory.getLogger(GradleDependencyAnalyzerService.class);
 
   private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("win");
 
@@ -666,6 +668,12 @@ public class GradleDependencyAnalyzerService {
     return new ArrayList<>(candidates);
   }
 
+  /**
+   * Detects Gradle wrapper version and maps it to a compatible Java version token.
+   *
+   * @param projectDir Gradle project directory
+   * @return Java version token (for example {@code 17.0}) or {@code null} when detection fails
+   */
   public static String detectJavaVersionFromGradleWrapper(File projectDir) {
     File wrapperProps = new File(projectDir, "gradle/wrapper/gradle-wrapper.properties");
     if (!wrapperProps.exists()) {

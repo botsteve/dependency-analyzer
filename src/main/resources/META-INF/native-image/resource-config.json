@@ -12,6 +12,21 @@
             },
             {
                 "pattern": ".*\\.properties$"
+            },
+            {
+                "pattern": ".*\\.dylib$"
+            },
+            {
+                "pattern": ".*\\.so$"
+            },
+            {
+                "pattern": ".*\\.dll$"
+            },
+            {
+                "pattern": ".*\\.frag$"
+            },
+            {
+                "pattern": ".*\\.vert$"
             }
         ]
     }

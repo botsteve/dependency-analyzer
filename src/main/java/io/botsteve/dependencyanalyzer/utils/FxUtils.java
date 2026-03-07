@@ -15,11 +15,17 @@ public class FxUtils {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(FxUtils.class);
 
+  /**
+   * Applies alignment to the given box and returns the same instance for fluent composition.
+   */
   public static HBox createBox(HBox box, Pos position) {
     box.setAlignment(position);
     return box;
   }
 
+  /**
+   * Shows an informational dialog with wrapped message content.
+   */
   public static void showAlert(String message) {
     Alert alert = new Alert(Alert.AlertType.INFORMATION);
     Label label = new Label(message);
@@ -31,6 +37,9 @@ public class FxUtils {
     alert.showAndWait();
   }
 
+  /**
+   * Shows an error dialog with wrapped message content.
+   */
   public static void showError(String message) {
     Alert alert = new Alert(Alert.AlertType.ERROR);
     Label label = new Label(message);
@@ -42,6 +51,9 @@ public class FxUtils {
     alert.showAndWait();
   }
 
+  /**
+   * Shows a resizable text dialog used for large status/output payloads.
+   */
   public static void showTextDialog(String title, String header, String message) {
     Alert alert = new Alert(Alert.AlertType.INFORMATION);
     TextArea textArea = new TextArea(message == null ? "" : message);
@@ -60,6 +72,9 @@ public class FxUtils {
     alert.showAndWait();
   }
 
+  /**
+   * Hides progress controls on the JavaFX thread and shows an error alert.
+   */
   public static void getErrorAlertAndCloseProgressBar(String message,
                                                       ProgressBar progressBar,
                                                       Label progressLabel) {
@@ -71,6 +86,9 @@ public class FxUtils {
     });
   }
 
+  /**
+   * Ensures progress controls are visible and updates their status text safely on the UI thread.
+   */
   public static void updateProgressBarAndLabel(String message, ProgressBar progressBar, Label progressLabel) {
     Platform.runLater(() -> {
       LOGGER.debug("Enable progress bar and configure label message: {}", message);

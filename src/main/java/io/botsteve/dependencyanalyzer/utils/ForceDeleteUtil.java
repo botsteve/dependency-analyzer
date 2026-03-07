@@ -1,7 +1,5 @@
 package io.botsteve.dependencyanalyzer.utils;
 
-import lombok.extern.slf4j.Slf4j;
-
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -10,7 +8,6 @@ import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-@Slf4j
 public class ForceDeleteUtil {
 
     private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("win");
@@ -18,6 +15,12 @@ public class ForceDeleteUtil {
     private static final int MAX_ATTEMPTS = 5;
     private static final long RETRY_DELAY_MS = 100;
 
+    /**
+     * Recursively deletes a directory, including read-only files, with retry and OS-specific fallbacks.
+     *
+     * @param directory directory to remove
+     * @throws IOException when deletion fails after all retries and fallback attempts
+     */
     public static void forceDeleteDirectory(Path directory) throws IOException {
         if (!Files.exists(directory)) {
             return;

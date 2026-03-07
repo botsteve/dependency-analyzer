@@ -19,6 +19,12 @@ public final class ScmUrlUtils {
   private ScmUrlUtils() {
   }
 
+  /**
+   * Normalizes SCM URL variants into canonical HTTPS-like repository URLs.
+   *
+   * @param rawScmUrl raw SCM value from metadata
+   * @return canonical URL (or empty string when input is blank)
+   */
   public static String canonicalize(String rawScmUrl) {
     if (rawScmUrl == null) {
       return "";
@@ -65,10 +71,16 @@ public final class ScmUrlUtils {
     }
   }
 
+  /**
+   * Produces a matching-safe normalized representation used in URL comparisons.
+   */
   public static String normalizeForMatching(String rawScmUrl) {
     return canonicalize(rawScmUrl);
   }
 
+  /**
+   * Resolves repository directory name from SCM URL with artifact fallback.
+   */
   public static String resolveRepoName(String scmUrl, String artifactFallback) {
     String canonical = canonicalize(scmUrl);
     String queryRepo = extractRepoNameFromQuery(canonical);
@@ -84,6 +96,9 @@ public final class ScmUrlUtils {
     return sanitizePathSegment(artifactFallback == null ? "" : artifactFallback);
   }
 
+  /**
+   * Sanitizes a value so it can be safely used as a filesystem path segment.
+   */
   public static String sanitizePathSegment(String rawValue) {
     if (rawValue == null) {
       return "";
@@ -98,6 +113,9 @@ public final class ScmUrlUtils {
     return sanitized;
   }
 
+  /**
+   * Builds a normalized repository key from target directory and repository name.
+   */
   public static String toRepoKey(String targetDirectory, String repoName) {
     if (repoName == null || repoName.isBlank()) {
       return "";

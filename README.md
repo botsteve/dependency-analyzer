@@ -16,6 +16,7 @@ A powerful JavaFX desktop application for analyzing **Maven** and **Gradle** pro
 - **Source Resolution**: Automatically resolves Git/SCM URLs for dependencies from Maven Central or Gradle module metadata.
 - **Selective Download**: Choose specific dependencies and download their source code repositories.
 - **Cross-Version Building**: Automatically builds dependencies using the correct JDK version (Java 8, 11, 17, 21) via Maven Toolchains or Gradle Wrapper.
+- **Auto JDK Bootstrap**: Download and configure required JDKs (8/11/17/21) from Adoptium directly from the UI for the current OS/CPU architecture.
 - **Smart JDK Detection (Gradle)**: Reads the Gradle Wrapper version from `gradle-wrapper.properties` and selects the compatible JDK automatically — no manual configuration needed.
 - **Verbose Build Logging**: All build tool invocations (Maven `-X`, Gradle `--info`, Ant `-verbose`) produce detailed output for troubleshooting.
 - **Improved UI & Task Visibility**: 
@@ -24,6 +25,20 @@ A powerful JavaFX desktop application for analyzing **Maven** and **Gradle** pro
   - **Space Recovery**: UI automatically collapses the progress area when tasks finish to maximize table space.
 - **Task Management**: Prevents conflicting operations (e.g., building while downloading) from running simultaneously.
 - **Cross-Platform**: Runs on Windows, macOS, and Linux as a single executable JAR.
+
+---
+
+## 📚 Detailed Component Documentation
+
+For deep implementation details, see the docs series:
+
+- [01 - Native Runtime and Startup Flow](docs/01-native-runtime-and-startup.md)
+- [02 - Dependency Loading and SCM Resolution](docs/02-dependency-loading-and-scm-resolution.md)
+- [03 - Dependency Download and Checkout Pipeline](docs/03-dependency-download-and-checkout.md)
+- [04 - JDK Bootstrap and Build Pipeline](docs/04-jdk-bootstrap-and-build-pipeline.md)
+- [05 - CI Workflows and Release Artifacts](docs/05-ci-workflows-and-release-artifacts.md)
+- [06 - JdkDownloadTask Deep Dive](docs/06-jdk-download-task-deep-dive.md)
+- [07 - Release Process for 2.0.0](docs/07-release-process-2.0.0.md)
 
 ---
 
@@ -64,28 +79,41 @@ A powerful JavaFX desktop application for analyzing **Maven** and **Gradle** pro
 java -jar target/dependency-analyzer.jar
 ```
 
-### 🛠️ Building a Native Image (GraalVM Native Image Maven Plugin)
+### 🛠️ Building Native Images
 
-This repo now activates `org.graalvm.buildtools:native-maven-plugin` inside the `native` profile. The profile binds the `compile-no-fork` goal to the `package` phase, mirroring the upstream sample that ships the same plugin configuration (see https://github.com/graalvm/native-build-tools/blob/master/samples/java-application/pom.xml#L70-L95). The plugin compiles our `io.botsteve.dependencyanalyzer.Launcher` entry point into a native binary that lives in `target/${project.artifactId}`.
+This repository supports two native build strategies:
 
-**Prerequisites:**
-1. GraalVM 25 (JDK 21+) with `native-image` installed (`gu install native-image`).
-2. `GRAALVM_HOME` or `JAVA_HOME` set to that GraalVM installation so the Maven plugin can locate `native-image`.
+1. **Graal Native Maven Plugin (`native` profile)**
+2. **GluonFX Native (`gluonfx-native` profile)**
 
-**Build command:**
+Both use `io.botsteve.dependencyanalyzer.NativeEntryPoint` and both require GraalVM JDK 21 with `native-image` installed.
+
+#### A) Graal Native (`-Pnative`)
+
 ```bash
 GRAALVM_HOME=/path/to/graalvm mvn clean package -Pnative -DskipTests
 ```
 
-Running the command above emits the native executable under `target/dependency-analyzer` (or `target/dependency-analyzer.exe` on Windows). The plugin already forwards the key native-image flags we used previously (for example, `--no-fallback`, `--install-exit-handlers`, `--enable-http`, `--enable-https`, `-H:+AddAllCharsets`, and `-H:+ReportExceptionStackTraces`) so HTTP/HTTPS access and exception diagnostics work the same as with the Gluon script.
+Output binary:
+- `target/dependency-analyzer` (or `target/dependency-analyzer.exe` on Windows)
 
-**Testing guidance:**
-1. Run `mvn test` on the JVM first to catch regressions quickly.
-2. After that, rebuild the native image with the command above and exercise the produced binary directly (`./target/dependency-analyzer`).
-3. You can also bind the plugin&#8217;s `native:test` goal if you ever want to run the test suite as a native binary, but the JUnit/Jar-in-Jar setup in this repo currently keeps the JVM test run as the primary feedback loop.
+#### B) Gluon Native (`-Pgluonfx-native`)
 
-**Reflection & resource metadata:**
-The Maven plugin automatically discovers metadata under `src/main/resources/META-INF/native-image`. Keep `reflect-config.json` and `resource-config.json` updated so GraalVM knows which classes, methods, and assets need runtime registration. The reflection file already lists the launcher/viewer classes, the UI models, and the `TreeTableView` policy helper that JavaFX synthesizes (see https://github.com/botsteve/dependency-analyzer/blob/main/src/main/resources/META-INF/native-image/reflect-config.json#L1-L67). The resource file ensures every `.css`, `.png`, `.xml`, and `.properties` asset (e.g., `styles.css`, `logback.xml`, and the persisted `env-settings.properties`) survives the native build (see https://github.com/botsteve/dependency-analyzer/blob/main/src/main/resources/META-INF/native-image/resource-config.json#L1-L18).
+```bash
+GRAALVM_HOME=/path/to/graalvm mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build
+```
+
+Output binary (macOS host build):
+- `target/gluonfx/aarch64-darwin/dependency-analyzer`
+
+#### Native metadata and behavior notes
+
+- Native metadata is maintained under:
+  - `src/main/resources/META-INF/native-image`
+  - `src/main/resources/META-INF/substrate/config`
+- These files provide reflection/JNI/resource configuration required for JavaFX, logging, and JGit-related native runtime paths.
+- In native runtime, dependency download uses a native-safe CLI git path to avoid JGit reflection pitfalls during clone/fetch/checkout.
+- You may still see JavaFX unnamed-module warnings during startup; these are expected for this packaging shape when stage startup succeeds.
 
 ---
 
@@ -100,7 +128,17 @@ The Maven plugin automatically discovers metadata under `src/main/resources/META
    - **JAVA11_HOME** — e.g., `/Library/Java/JavaVirtualMachines/jdk-11.jdk/Contents/Home`
    - **JAVA17_HOME** — e.g., `/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home`
    - **JAVA21_HOME** — e.g., `/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home`
-3. Click **Save**. Settings are persisted in `env-settings.properties` in the application's working directory.
+3. Click **Save**. Settings are persisted in `config/env-settings.properties` under the application's base directory.
+
+> Tip: You can also use the toolbar button **Download Required JDKs** to automatically download JDK 8/11/17/21 for your platform and update `config/env-settings.properties` for you.
+>
+> Download location: JDKs are placed next to the app execution base directory under `downloaded_jdks/`, each in its own folder (`JAVA8_HOME`, `JAVA11_HOME`, `JAVA17_HOME`, `JAVA21_HOME`).
+>
+> During JDK bootstrap, the app shows live download/extraction progress in the progress bar and status label (percent updates), and logs progress checkpoints to `logs/dependency-analyzer.log`.
+>
+> While JDK bootstrap is running, the rest of the UI actions are temporarily locked to avoid conflicting operations.
+>
+> Note for ARM hosts: Java 8 is downloaded as **x64** because an aarch64 binary is not available from this API endpoint.
 
 > **Required environment variables**: Ensure `JAVA_HOME` and `MAVEN_HOME` are set on your system. The application warns you if they are missing when opening a project.
 
@@ -165,7 +203,9 @@ When these appear, verify SCM overrides first (`dependency.analyzer.scm.override
 
 ## 🌐 Proxy Configuration
 
-If you are behind a corporate proxy, the application reads the standard **`http_proxy`** (or **`HTTP_PROXY`**) environment variable to configure outbound HTTP connections. This is used when downloading source code repositories (Git clone) from the internet.
+If you are behind a corporate proxy, the application reads **`https_proxy` / `HTTPS_PROXY`** first, then falls back to **`http_proxy` / `HTTP_PROXY`**. This is used when downloading source code repositories and when downloading required JDK archives.
+
+You can bypass proxy for specific hosts by setting **`no_proxy` / `NO_PROXY`** (or `noproxy`) as a comma-separated list (for example: `localhost,.internal.company.com,*.svc.cluster.local`).
 
 ### How to Configure
 
@@ -175,6 +215,7 @@ Set the `http_proxy` environment variable **before launching the application**:
 
 ```bash
 export http_proxy=http://your-proxy-host:8080
+export no_proxy=localhost,.internal.company.com
 java -jar target/dependency-analyzer.jar
 ```
 
@@ -189,6 +230,7 @@ export https_proxy=http://your-proxy-host:8080
 
 ```cmd
 set http_proxy=http://your-proxy-host:8080
+set no_proxy=localhost,.internal.company.com
 java -jar target/dependency-analyzer.jar
 ```
 
@@ -305,8 +347,7 @@ Right-click on any dependency to access additional options via the context menu.
 ```
 io.botsteve.dependencyanalyzer/
 ├── views/                  # JavaFX application views
-│   ├── MainAppView.java        # Main application window
-│   └── LoginViewer.java         # JavaFX entry integration view
+│   └── MainAppView.java        # Main application window
 ├── components/             # UI components
 │   ├── TableViewComponent.java  # Tree-table + filter/scope controls
 │   ├── ColumnsComponent.java    # Column definitions (scope, SCM, etc)
@@ -357,7 +398,7 @@ io.botsteve.dependencyanalyzer/
 | macOS M1/M2 build failures | Some older dependencies (e.g., Hibernate Validator with JRuby) may need an x86_64 JDK via Rosetta. |
 | Proxy connection errors | Set the `http_proxy` environment variable before launching. See [Proxy Configuration](#-proxy-configuration). |
 | No dependencies found | Ensure the project compiles. For Gradle, ensure `dependencies` configurations are declared. |
-| Settings not saved | Check that `env-settings.properties` is writable in the JAR's directory. |
+| Settings not saved | Check that `config/env-settings.properties` is writable under the app base directory. |
 
 ---
 
@@ -383,6 +424,8 @@ Use these commands to validate the current implementation and packaging gates:
 mvn test
 mvn clean package
 mvn -B verify --file pom.xml
+GRAALVM_HOME=/path/to/graalvm mvn -Pnative -DskipTests package
+GRAALVM_HOME=/path/to/graalvm mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build
 ```
 
 Single-test execution shortcuts:
@@ -397,6 +440,11 @@ Targeted regression checks for filtering/output popup:
 ```bash
 mvn -Dtest=TableViewComponentFilterTest,ColumnsComponentOutputPopupTest,DependencyAnalyzerTest test
 ```
+
+GitHub Actions (`.github/workflows/maven.yml`) now runs:
+- Matrix JVM verification (`mvn -B verify --file pom.xml`) on Ubuntu, Windows, and macOS.
+- A dedicated macOS GraalVM native-image build (`mvn -B package -Pnative -DskipTests`) with binary artifact upload.
+- A dedicated macOS Gluon native build (`mvn -B -DskipTests -Pgluonfx-native -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build`) with binary artifact upload.
 
 ## 🤖 Agent Development Guide
 

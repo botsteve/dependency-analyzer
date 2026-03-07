@@ -38,10 +38,16 @@ public class ScmRepositories {
   private ScmRepositories() {
   }
 
+  /**
+   * Applies SCM override rules using artifact-based mapping only.
+   */
   public static String fixNonResolvableScmRepositorise(String scmUrl, String artifactId) {
     return fixNonResolvableScmRepositorise(scmUrl, null, artifactId);
   }
 
+  /**
+   * Ensures the external SCM override file exists and is initialized from template when missing.
+   */
   public static void initializeOverridesFile() {
     synchronized (RELOAD_LOCK) {
       Path overridesPath = resolveOverridesPath();
@@ -49,6 +55,9 @@ public class ScmRepositories {
     }
   }
 
+  /**
+   * Applies SCM override mapping for artifact/group keys and returns canonical SCM URL.
+   */
   public static String fixNonResolvableScmRepositorise(String scmUrl, String groupId, String artifactId) {
     reloadOverridesIfNeeded();
 

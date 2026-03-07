@@ -29,6 +29,11 @@ class DependencyDownloaderTransportRetryTest {
     assertEquals("TIMEOUT", DependencyDownloaderTask.classifyFailureCode(new RuntimeException("timed out"), false));
     assertEquals("REDIRECT_BLOCKED", DependencyDownloaderTask.classifyFailureCode(new RuntimeException("redirect blocked"), false));
     assertEquals("TAG_MISS", DependencyDownloaderTask.classifyFailureCode(new RuntimeException("tag not found"), true));
+    assertEquals("NATIVE_RUNTIME",
+        DependencyDownloaderTask.classifyFailureCode(
+            new RuntimeException("Enumerated values of type org.eclipse.jgit.lib.CoreConfig$TrustPackedRefsStat not available"),
+            true));
+    assertEquals("CHECKOUT_FAILURE", DependencyDownloaderTask.classifyFailureCode(new RuntimeException("detached checkout failed"), true));
   }
 
   @Test

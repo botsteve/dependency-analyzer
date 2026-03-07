@@ -4,49 +4,86 @@ package io.botsteve.dependencyanalyzer;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
-import io.botsteve.dependencyanalyzer.logging.MemoryLogger;
 import io.botsteve.dependencyanalyzer.utils.LogUtils;
-
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import io.botsteve.dependencyanalyzer.views.MainAppView;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.logging.Level;
 
 import static io.botsteve.dependencyanalyzer.utils.ScmRepositories.initializeOverridesFile;
 import static io.botsteve.dependencyanalyzer.utils.Utils.createSettingsFile;
-import static io.botsteve.dependencyanalyzer.views.LoginViewer.LOGIN_VIEWER;
-
 public class DependencyAnalyzer extends Application {
 
+    private static final Logger log = LoggerFactory.getLogger(DependencyAnalyzer.class);
+    private static final java.util.logging.Logger JUL_LOG = java.util.logging.Logger.getLogger(DependencyAnalyzer.class.getName());
+    private static final Path STARTUP_TRACE_FILE = Path.of("/tmp", "dependency-analyzer-startup-trace.log");
 
-    private ScheduledExecutorService scheduler;
+    public DependencyAnalyzer() {
+        startupProbe("DependencyAnalyzer constructor entered");
+    }
 
+    /**
+     * JavaFX lifecycle hook executed before primary stage creation.
+     */
+    @Override
+    public void init() {
+        startupProbe("DependencyAnalyzer.init entered");
+    }
+
+    /**
+     * Starts the main JavaFX application view and initializes runtime configuration files.
+     *
+     * @param primaryStage primary JavaFX stage
+     */
     @Override
     public void start(Stage primaryStage) {
-        LOGIN_VIEWER.showPasswordDialog(primaryStage);
+        startupProbe("DependencyAnalyzer.start entered");
         createSettingsFile();
         initializeOverridesFile();
-        scheduler = Executors.newScheduledThreadPool(1);
-        scheduler.scheduleAtFixedRate(MemoryLogger::logMemoryUsage, 0, 10, TimeUnit.SECONDS);
+        log.info("Starting main JavaFX view");
+        JUL_LOG.log(Level.INFO, "Starting main JavaFX view");
+        new MainAppView().start(primaryStage);
+        startupProbe("MainAppView.start returned to DependencyAnalyzer.start");
+        Platform.setImplicitExit(true);
 
     }
 
+    /**
+     * Application entry point.
+     *
+     * @param args application arguments
+     */
     public static void main(String[] args) {
         LogUtils.initializeBaseDirProperty(DependencyAnalyzer.class);
-        launch(args);
+        launch(DependencyAnalyzer.class, args);
     }
 
+    /**
+     * JavaFX lifecycle shutdown hook.
+     */
     @Override
     public void stop() {
         shutdown();
     }
 
     private void shutdown() {
-        if (scheduler != null && !scheduler.isShutdown()) {
-            scheduler.shutdownNow();
-        }
         // Add any other cleanup code here
         Platform.exit();
         System.exit(0);
+    }
+
+    private static void startupProbe(String message) {
+        String line = "[startup] " + message + System.lineSeparator();
+        System.err.print(line);
+        try {
+            Files.writeString(STARTUP_TRACE_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+        }
     }
 
 }

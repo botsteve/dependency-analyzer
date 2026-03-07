@@ -302,6 +302,9 @@ public class ScmEnrichmentService {
     return doc;
   }
 
+  /**
+   * Canonicalizes SCM URL value into a normalized HTTP(S) form.
+   */
   public static String convertSCM(String scmUrl) {
     return ScmUrlUtils.canonicalize(scmUrl);
   }

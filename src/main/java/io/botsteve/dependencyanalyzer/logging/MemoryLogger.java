@@ -3,12 +3,19 @@ package io.botsteve.dependencyanalyzer.logging;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
+/**
+ * Emits lightweight heap/non-heap memory telemetry at trace level.
+ */
 public class MemoryLogger {
 
+  private static final Logger log = LoggerFactory.getLogger(MemoryLogger.class);
 
+  /**
+   * Logs current heap and non-heap memory counters in MB.
+   */
   public static void logMemoryUsage() {
     MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
 

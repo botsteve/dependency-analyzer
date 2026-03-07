@@ -4,12 +4,21 @@ import static io.botsteve.dependencyanalyzer.service.MavenInvokerService.getMave
 
 import java.io.File;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
 import io.botsteve.dependencyanalyzer.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
 public class DependencyTreeAnalyzerService {
 
+  private static final Logger log = LoggerFactory.getLogger(DependencyTreeAnalyzerService.class);
+
+  /**
+   * Returns module list from parent pom.xml.
+   *
+   * @param projectDir Maven project root directory
+   * @return declared module names
+   * @throws Exception when POM parsing fails
+   */
   public static List<String> getModules(String projectDir) throws Exception {
     File parentPomFile = new File(projectDir, "pom.xml");
     List<String> modules = Utils.parseModulesFromPom(parentPomFile);
@@ -17,6 +26,13 @@ public class DependencyTreeAnalyzerService {
     return modules;
   }
 
+  /**
+   * Executes Maven dependency:tree in JSON mode for root or module scope.
+   *
+   * @param projectDir Maven project root directory
+   * @param moduleDir module path (empty for root)
+   * @return raw dependency tree JSON extracted from Maven logs
+   */
   public static String runMavenDependencyTree(String projectDir, String moduleDir) {
     log.info("Running Maven dependency:tree for module '{}' in {}", moduleDir.isEmpty() ? "(root)" : moduleDir, projectDir);
     var outputHandler = getMavenInvokerResult(projectDir, moduleDir,
@@ -47,4 +63,3 @@ public class DependencyTreeAnalyzerService {
     return jsonBuilder.toString().trim();
   }
 }
-

@@ -20,14 +20,28 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
-        <javafx.version>21.0.3</javafx.version>
-        <junit.version>5.10.2</junit.version>
-        <mockito.version>5.11.0</mockito.version>
+
+        <javafx.version>23.0.1</javafx.version>
+        <jackson.version>2.21.0</jackson.version>
+        <maven.invoker.version>3.3.0</maven.invoker.version>
+        <jgit.version>7.5.0.202512021534-r</jgit.version>
+        <lombok.version>1.18.42</lombok.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <logback.version>1.5.32</logback.version>
+        <junit.version>5.14.2</junit.version>
+        <mockito.version>5.22.0</mockito.version>
+
+        <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+        <maven.surefire.plugin.version>3.5.5</maven.surefire.plugin.version>
+        <maven.shade.plugin.version>3.6.2</maven.shade.plugin.version>
+        <maven.antrun.plugin.version>3.1.0</maven.antrun.plugin.version>
+        <maven.release.plugin.version>3.1.1</maven.release.plugin.version>
+        <javafx.maven.plugin.version>0.0.8</javafx.maven.plugin.version>
         <native.maven.plugin.version>0.11.5</native.maven.plugin.version>
+        <gluonfx.maven.plugin.version>1.0.28</gluonfx.maven.plugin.version>
     </properties>
 
     <dependencies>
-        <!-- JavaFX Dependencies (Cross-Platform) -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
@@ -39,48 +53,42 @@
             <version>${javafx.version}</version>
         </dependency>
 
-        <!-- JSON Processing -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.17.1</version>
+            <version>${jackson.version}</version>
         </dependency>
 
-        <!-- Maven Invoker -->
         <dependency>
             <groupId>org.apache.maven.shared</groupId>
             <artifactId>maven-invoker</artifactId>
-            <version>3.3.0</version>
+            <version>${maven.invoker.version}</version>
         </dependency>
 
-        <!-- JGit -->
         <dependency>
             <groupId>org.eclipse.jgit</groupId>
             <artifactId>org.eclipse.jgit</artifactId>
-            <version>6.10.0.202406032230-r</version>
+            <version>${jgit.version}</version>
         </dependency>
 
-        <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.32</version>
+            <version>${lombok.version}</version>
             <scope>provided</scope>
         </dependency>
 
-        <!-- Logging -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>2.0.13</version>
+            <version>${slf4j.version}</version>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.5.6</version>
+            <version>${logback.version}</version>
         </dependency>
 
-        <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
@@ -113,7 +121,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
+                <version>${maven.compiler.plugin.version}</version>
                 <configuration>
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
@@ -123,16 +131,16 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.2.5</version>
+                <version>${maven.surefire.plugin.version}</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
                 </configuration>
             </plugin>
-            
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>${maven.shade.plugin.version}</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -161,11 +169,10 @@
                 </executions>
             </plugin>
 
-            <!-- Clean up the 'original' jar created by shade plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
-                <version>3.1.0</version>
+                <version>${maven.antrun.plugin.version}</version>
                 <executions>
                     <execution>
                         <id>remove-original-jar</id>
@@ -185,22 +192,16 @@
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
-                <version>0.0.8</version>
+                <version>${javafx.maven.plugin.version}</version>
                 <configuration>
                     <mainClass>io.botsteve.dependencyanalyzer.Launcher</mainClass>
                 </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-release-plugin</artifactId>
-                <version>3.0.1</version>
+                <version>${maven.release.plugin.version}</version>
                 <configuration>
                     <tagNameFormat>@{project.version}</tagNameFormat>
                 </configuration>
@@ -211,6 +212,14 @@
     <profiles>
         <profile>
             <id>native</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-simple</artifactId>
+                    <version>${slf4j.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
             <build>
                 <plugins>
                     <plugin>
@@ -229,8 +238,11 @@
                         </executions>
                         <configuration>
                             <imageName>${project.artifactId}</imageName>
-                            <mainClass>io.botsteve.dependencyanalyzer.Launcher</mainClass>
+                            <mainClass>io.botsteve.dependencyanalyzer.NativeEntryPoint</mainClass>
                             <fallback>false</fallback>
+                            <metadataRepository>
+                                <enabled>true</enabled>
+                            </metadataRepository>
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>--install-exit-handlers</buildArg>
@@ -238,12 +250,63 @@
                                 <buildArg>--enable-https</buildArg>
                                 <buildArg>-H:+AddAllCharsets</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                                <buildArg>-H:ReflectionConfigurationResources=META-INF/substrate/config/reflectionconfig.json,META-INF/substrate/config/reflectionconfig-aarch64-darwin.json,META-INF/substrate/config/reflectionconfig-x86_64-darwin.json,META-INF/substrate/config/reflectionconfig-aarch64-linux.json,META-INF/substrate/config/reflectionconfig-x86_64-linux.json,META-INF/substrate/config/reflectionconfig-x86_64-windows.json</buildArg>
+                                <buildArg>-H:JNIConfigurationResources=META-INF/substrate/config/jniconfig.json,META-INF/substrate/config/jniconfig-aarch64-darwin.json,META-INF/substrate/config/jniconfig-x86_64-darwin.json,META-INF/substrate/config/jniconfig-aarch64-linux.json,META-INF/substrate/config/jniconfig-x86_64-linux.json,META-INF/substrate/config/jniconfig-x86_64-windows.json</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>
                 </plugins>
             </build>
         </profile>
+        <profile>
+            <id>gluonfx-native</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-simple</artifactId>
+                    <version>${slf4j.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.gluonhq</groupId>
+                        <artifactId>gluonfx-maven-plugin</artifactId>
+                        <version>${gluonfx.maven.plugin.version}</version>
+                        <configuration>
+                            <target>host</target>
+                            <mainClass>io.botsteve.dependencyanalyzer.NativeEntryPoint</mainClass>
+                            <javafxStaticSdkVersion>${javafx.version}</javafxStaticSdkVersion>
+                            <resourcesList>
+                                <list>logback.xml</list>
+                                <list>META-INF/services/org.slf4j.spi.SLF4JServiceProvider</list>
+                            </resourcesList>
+                            <reflectionList>
+                                <list>ch.qos.logback.classic.spi.LogbackServiceProvider</list>
+                                <list>ch.qos.logback.core.ConsoleAppender</list>
+                                <list>ch.qos.logback.classic.encoder.PatternLayoutEncoder</list>
+                                <list>ch.qos.logback.classic.PatternLayout</list>
+                                <list>ch.qos.logback.core.rolling.RollingFileAppender</list>
+                                <list>ch.qos.logback.core.rolling.TimeBasedRollingPolicy</list>
+                                <list>ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy</list>
+                                <list>ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy</list>
+                                <list>ch.qos.logback.core.rolling.helper.FileNamePattern</list>
+                                <list>ch.qos.logback.core.util.FileSize</list>
+                                <list>org.eclipse.jgit.internal.JGitText</list>
+                                <list>org.eclipse.jgit.internal.storage.dfs.DfsText</list>
+                                <list>org.eclipse.jgit.gitrepo.internal.RepoText</list>
+                            </reflectionList>
+                            <linkerArgs>
+                                <arg>-Wl</arg>
+                                <arg>-framework</arg>
+                                <arg>Carbon</arg>
+                                <arg>${env.GRAALVM_HOME}/lib/static/darwin-aarch64/libmanagement_ext.a</arg>
+                            </linkerArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
-
 </project>

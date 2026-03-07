@@ -5,11 +5,21 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Properties;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
 public class ToolchainsGenerator {
 
+  private static final Logger log = LoggerFactory.getLogger(ToolchainsGenerator.class);
+
+  /**
+   * Generates a Maven toolchains.xml file from configured JDK settings.
+   *
+   * @param settings persisted environment settings containing JAVA*_HOME values
+   * @return generated toolchains file path
+   * @throws IOException when file writing fails
+   * @throws URISyntaxException when repository path resolution fails
+   */
   public static File generateToolchainsXml(Properties settings) throws IOException, URISyntaxException {
     File toolchainsFile = new File(Utils.getRepositoriesPath(), "toolchains.xml");
     

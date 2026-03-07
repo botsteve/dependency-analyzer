@@ -31,4 +31,15 @@ class DependencyDownloaderTaskStatusTest {
     assertTrue(message.contains("Failed: 0"));
     assertFalse(message.contains("Failed dependencies:"));
   }
+
+  @Test
+  void shouldIncludeFailureReasonWhenPresentInStatusDetails() {
+    Map<String, String> failures = Map.of(
+        "/tmp/downloaded_repos/project/3rd-party/snakeyaml",
+        "FAILED:NETWORK_FAILURE [op=DL-1,dur=10ms] repo=snakeyaml url=https://x message=Connection reset by peer");
+
+    String message = DependencyDownloaderTask.buildDownloadSummaryMessage(1, failures);
+
+    assertTrue(message.contains("- snakeyaml (NETWORK_FAILURE) - Connection reset by peer"));
+  }
 }

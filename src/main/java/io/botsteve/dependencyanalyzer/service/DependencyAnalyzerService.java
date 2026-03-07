@@ -13,13 +13,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
 import io.botsteve.dependencyanalyzer.model.ProjectType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
 public class DependencyAnalyzerService {
 
+  private static final Logger log = LoggerFactory.getLogger(DependencyAnalyzerService.class);
   private static final Map<String, DependencyNode> moduleToDependencyNode = new HashMap<>();
 
   /**
@@ -45,6 +46,13 @@ public class DependencyAnalyzerService {
     return ProjectType.detect(new File(projectDir));
   }
 
+  /**
+   * Analyzes Maven dependencies for root and modules, then removes module self-artifacts.
+   *
+   * @param projectDir Maven project directory
+   * @return aggregated dependency roots excluding module artifacts
+   * @throws Exception when Maven tree extraction or JSON parsing fails
+   */
   private static Set<DependencyNode> getMavenDependencies(String projectDir) throws Exception {
     List<String> modules = getModules(projectDir);
     ObjectMapper objectMapper = new ObjectMapper();

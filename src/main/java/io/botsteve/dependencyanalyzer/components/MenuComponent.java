@@ -47,15 +47,25 @@ public class MenuComponent {
               - Resolve SCM/source repository URLs using metadata and runtime SCM override mappings.
               - Download selected 3rd-party and 4th-party source repositories and checkout matching tags.
               - Build selected downloaded 3rd-party dependencies with Maven/Gradle/Ant using configured JDK toolchains (8/11/17/21).
+              - Package a GraalVM native executable with JavaFX metadata support from the Maven native profile.
+              - Auto-download required JDKs (8/11/17/21) for the current OS/architecture and update config/env-settings.properties.
+              - Show live JDK download/extraction progress in the UI and in logs.
+              - Temporarily lock the rest of the UI while JDK bootstrap is running to avoid conflicting actions.
               - Generate aggregated license reports for downloaded dependency repositories.
 
           Environment requirements:
               - JAVA_HOME pointing to JDK 21+.
               - MAVEN_HOME pointing to a local Maven installation.
-              - JAVA8_HOME, JAVA11_HOME, JAVA17_HOME, JAVA21_HOME configured in Settings → Environment Settings.
-              - Git available on PATH (proxy support via http_proxy/HTTP_PROXY when needed).
+              - For native builds: GraalVM JDK 21+ with native-image installed and GRAALVM_HOME configured.
+              - JAVA8_HOME, JAVA11_HOME, JAVA17_HOME, JAVA21_HOME configured in Settings → Environment Settings,
+                or use the "Download Required JDKs" button for automatic setup.
+              - Git available on PATH.
+              - Proxy support via https_proxy/HTTPS_PROXY (fallback http_proxy/HTTP_PROXY), with bypass via no_proxy/NO_PROXY.
        """;
 
+  /**
+   * Opens the environment settings dialog and persists user edits.
+   */
   public void openSettingsDialog(Stage primaryStage) {
     // Load existing settings or create new ones
     Properties settings = loadSettings();
@@ -148,6 +158,9 @@ public class MenuComponent {
   }
 
 
+  /**
+   * Builds the About menu section.
+   */
   public Menu getAboutMenu() {
     Menu about = new Menu("About");
     MenuItem readMe = new MenuItem("Read Me");
@@ -156,6 +169,9 @@ public class MenuComponent {
     return about;
   }
 
+  /**
+   * Builds the Settings menu section.
+   */
   public Menu getSettingsMenu(Stage primaryStage) {
     Menu settingsMenu = new Menu("Settings");
     MenuItem envSettingsItem = new MenuItem("Environment Settings");
@@ -164,6 +180,9 @@ public class MenuComponent {
     return settingsMenu;
   }
 
+  /**
+   * Builds the File menu section.
+   */
   public Menu getFileMenu(Stage primaryStage) {
     Menu fileMenu = new Menu("File");
     MenuItem exportItem = new MenuItem("Export to JSON");
@@ -172,6 +191,9 @@ public class MenuComponent {
     return fileMenu;
   }
 
+  /**
+   * Builds the View menu section.
+   */
   public Menu getViewMenu(Stage primaryStage) {
     Menu viewMenu = new Menu("View");
     CheckMenuItem darkModeItem = new CheckMenuItem("Dark Mode");
@@ -206,6 +228,9 @@ public class MenuComponent {
      }
   }
 
+  /**
+   * Builds and returns the top-level menu bar for the application shell.
+   */
   public MenuBar getMenuBar(Stage primaryStage) {
     MenuBar menuBar = new MenuBar();
     var fileMenu = getFileMenu(primaryStage);

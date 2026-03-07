@@ -66,10 +66,25 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
   private String currentCommandExecuted;
   private final Set<String> selectedScmUrls;
 
+  /**
+   * Creates a build task for all discovered third-party repositories.
+   *
+   * @param progressBar progress bar bound to task state
+   * @param progressLabel progress label bound to task messages
+   * @param projectName current project name used for repository root resolution
+   */
   public BuildRepositoriesTask(ProgressBar progressBar, Label progressLabel, String projectName) {
     this(progressBar, progressLabel, projectName, null);
   }
 
+  /**
+   * Creates a build task constrained to selected SCM URLs.
+   *
+   * @param progressBar progress bar bound to task state
+   * @param progressLabel progress label bound to task messages
+   * @param projectName current project name used for repository root resolution
+   * @param selectedScmUrls SCM URLs selected by the user; empty means build every discovered repository
+   */
   public BuildRepositoriesTask(ProgressBar progressBar, Label progressLabel, String projectName, Set<String> selectedScmUrls) {
     this.progressBar = progressBar;
     this.progressLabel = progressLabel;
@@ -98,6 +113,12 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
     progressLabel.setVisible(false);
   }
 
+  /**
+   * Executes repository discovery, toolchains generation, and build orchestration.
+   *
+   * @return map of repository keys to structured build status messages
+   * @throws Exception when repository discovery or build orchestration fails
+   */
   @Override
   protected Map<String, String> call() throws Exception {
     var repositoriesPath = getThirdPartyRepositoriesPath(projectName);
@@ -129,6 +150,11 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
     return false;
   }
 
+  /**
+   * Builds all eligible repositories under the given root and records per-repository status.
+   *
+   * @param repositoriesPath root directory that contains downloaded repositories
+   */
   public void buildProject(String repositoriesPath) {
     File repositoriesDir = new File(repositoriesPath);
 
@@ -473,6 +499,11 @@ public class BuildRepositoriesTask extends Task<Map<String, String>> {
     }
   }
 
+  /**
+   * Recursively applies writable/executable permissions to recover from build file permission issues.
+   *
+   * @param directory directory or file path that should receive relaxed permissions
+   */
   public static void changeDirectoryPermissions(File directory) {
     try {
       // Set read and write permissions for owner, group, and others

@@ -148,3 +148,4 @@ dependency-reduced-pom.xml
 .sisyphus
 tmp/**
 config/
+downloaded_jdks/**

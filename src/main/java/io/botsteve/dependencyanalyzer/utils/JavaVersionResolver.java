@@ -16,6 +16,9 @@ public class JavaVersionResolver {
 
   public static final List<String> JDKS = List.of("JAVA21_HOME", "JAVA17_HOME", "JAVA11_HOME", "JAVA8_HOME");
 
+  /**
+   * Resolves a JAVA_HOME path candidate from normalized Java version token.
+   */
   public static String resolveJavaPathToBeUsed(String javaVersion) {
     return switch (javaVersion) {
       case "21.0" -> getPropertyFromSetting("JAVA21_HOME");
@@ -26,6 +29,9 @@ public class JavaVersionResolver {
     };
   }
 
+  /**
+   * Resolves the settings key name ({@code JAVA*_HOME}) for a Java version token.
+   */
   public static String resolveJavaVersionToEnvProperty(String javaVersion) {
     return switch (javaVersion) {
       case "21.0" -> "JAVA21_HOME";
@@ -37,6 +43,9 @@ public class JavaVersionResolver {
   }
 
 
+  /**
+   * Executes Maven effective-pom and extracts the required Java version.
+   */
   public static String getJavaVersionMaven(File repo) {
     var outputHandler = getMavenInvokerResult(repo.getAbsolutePath(),
                                               "", "help:effective-pom",
@@ -46,6 +55,9 @@ public class JavaVersionResolver {
     return resolveJavaVersionFromEffectivePom(response);
   }
 
+  /**
+   * Parses effective-pom XML output and returns the highest detected Java version.
+   */
   public static String resolveJavaVersionFromEffectivePom(String effectivePomOutput) {
     try {
       // Isolate XML content from potential Maven log output
@@ -140,6 +152,9 @@ public class JavaVersionResolver {
       return null;
   }
 
+  /**
+   * Checks whether a version token can be parsed as a numeric Java version.
+   */
   public static boolean isValidVersion(String str) {
     try {
       Double.parseDouble(str);

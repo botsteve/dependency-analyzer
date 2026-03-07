@@ -17,6 +17,16 @@ public class MavenInvokerService {
   private static final Logger log = LoggerFactory.getLogger(MavenInvokerService.class);
 
 
+  /**
+   * Executes a Maven command through Maven Invoker API and returns captured console output.
+   *
+   * @param projectDir project root directory
+   * @param moduleDir optional module subdirectory relative to project root
+   * @param goals Maven goals/commands string
+   * @param mavenOpts MAVEN_OPTS value passed to invocation
+   * @param jdkPath JAVA_HOME value for the command process
+   * @return collector containing Maven output lines
+   */
   public static CollectingOutputHandler getMavenInvokerResult(String projectDir,
                                                               String moduleDir,
                                                               String goals,

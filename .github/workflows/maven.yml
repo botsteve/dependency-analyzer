@@ -37,12 +37,89 @@ jobs:
       if: matrix.os == 'ubuntu-latest' # Upload only once since it's a cross-platform shaded jar
       uses: actions/upload-artifact@v4
       with:
-        name: dependency-viewer
-        path: target/dependency-viewer.jar
+        name: dependency-analyzer
+        path: target/dependency-analyzer.jar
         if-no-files-found: error
 
     - name: Publish to Release
       if: matrix.os == 'ubuntu-latest' && github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
-        files: target/dependency-viewer.jar
+        files: target/dependency-analyzer.jar
+
+  native-macos:
+    name: Native Image (macOS)
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up GraalVM JDK 21
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: '21'
+        distribution: 'graalvm-community'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        cache: maven
+        components: 'native-image'
+
+    - name: Verify native-image installation
+      run: native-image --version
+
+    - name: Build native binary with Maven profile
+      run: mvn -B package -Pnative -DskipTests
+      env:
+        GRAALVM_HOME: ${{ env.JAVA_HOME }}
+
+    - name: Assert native binary exists
+      run: test -x target/dependency-analyzer
+
+    - name: Upload Native Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-analyzer-native-macos
+        path: target/dependency-analyzer
+        if-no-files-found: error
+
+    - name: Publish Native Binary to Release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: target/dependency-analyzer
+
+  gluon-native-macos:
+    name: Gluon Native Image (macOS)
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up GraalVM JDK 21
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: '21'
+        distribution: 'graalvm-community'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        cache: maven
+        components: 'native-image'
+
+    - name: Build Gluon native executable
+      run: mvn -B -DskipTests -Pgluonfx-native -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build
+      env:
+        GRAALVM_HOME: ${{ env.JAVA_HOME }}
+
+    - name: Assert Gluon native binary exists
+      run: test -x target/gluonfx/aarch64-darwin/dependency-analyzer
+
+    - name: Upload Gluon Native Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-analyzer-gluon-native-macos
+        path: target/gluonfx/aarch64-darwin/dependency-analyzer
+        if-no-files-found: error
+
+    - name: Publish Gluon Native Binary to Release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: target/gluonfx/aarch64-darwin/dependency-analyzer

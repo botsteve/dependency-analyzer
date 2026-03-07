@@ -1,7 +1,6 @@
 package io.botsteve.dependencyanalyzer.views;
 
 
-import javafx.application.Application;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -10,7 +9,13 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.logging.Level;
 import io.botsteve.dependencyanalyzer.components.ButtonsComponent;
 import io.botsteve.dependencyanalyzer.components.CheckBoxComponent;
 import io.botsteve.dependencyanalyzer.components.ColumnsComponent;
@@ -19,8 +24,11 @@ import io.botsteve.dependencyanalyzer.components.ProgressBoxComponent;
 import io.botsteve.dependencyanalyzer.components.TableViewComponent;
 
 @Data
-@EqualsAndHashCode(callSuper=false)
-public class MainAppView extends Application {
+public class MainAppView {
+
+  private static final Logger log = LoggerFactory.getLogger(MainAppView.class);
+  private static final java.util.logging.Logger JUL_LOG = java.util.logging.Logger.getLogger(MainAppView.class.getName());
+  private static final Path STARTUP_TRACE_FILE = Path.of("/tmp", "dependency-analyzer-startup-trace.log");
 
   private final TableViewComponent tableViewComponent = new TableViewComponent();
   private final ColumnsComponent columnsComponent = new ColumnsComponent(tableViewComponent);
@@ -29,8 +37,8 @@ public class MainAppView extends Application {
   private final MenuComponent menuComponent = new MenuComponent(tableViewComponent);
   private final ProgressBoxComponent progressBoxComponent = new ProgressBoxComponent();
 
-  @Override
   public void start(Stage primaryStage) {
+    startupProbe("MainAppView.start entered");
 
     BorderPane root = new BorderPane();
     Scene scene = new Scene(root, 1000, 800);
@@ -51,6 +59,10 @@ public class MainAppView extends Application {
     var progressBox = progressBoxComponent.createProgressBox(progressBar, progressLabel, scene);
     var toolBar = buttonsComponent.getToolBar(primaryStage, progressBar, progressLabel);
     var toolsBox = tableViewComponent.creatToolsBox();
+    var jdkDownloadRunning = buttonsComponent.jdkDownloadRunningProperty();
+
+    toolsBox.disableProperty().bind(jdkDownloadRunning);
+    treeTableView.disableProperty().bind(jdkDownloadRunning);
 
     VBox vbox = new VBox(10);
     vbox.getChildren().addAll(toolBar, toolsBox, progressBox, treeTableView);
@@ -60,19 +72,39 @@ public class MainAppView extends Application {
 
     // Configure MenuBar
     var menuBar = menuComponent.getMenuBar(primaryStage);
+    menuBar.disableProperty().bind(jdkDownloadRunning);
     root.setTop(menuBar);
 
     Label developerLabel = new Label("Developed by Rusen Stefan @ Oracle");
     BorderPane.setAlignment(developerLabel, Pos.BOTTOM_CENTER);
     root.setBottom(developerLabel);
     primaryStage.setTitle("Dependency Analyzer");
-    scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+    primaryStage.setOnShown(event -> {
+      javafx.application.Platform.setImplicitExit(true);
+      log.info("Main JavaFX stage shown");
+      JUL_LOG.log(Level.INFO, "Main JavaFX stage shown");
+      startupProbe("Main JavaFX stage onShown fired");
+    });
+    var stylesheetUrl = getClass().getResource("/styles.css");
+    if (stylesheetUrl != null) {
+      scene.getStylesheets().add(stylesheetUrl.toExternalForm());
+    }
     primaryStage.setScene(scene);
+    log.info("Calling primaryStage.show()");
+    JUL_LOG.log(Level.INFO, "Calling primaryStage.show()");
+    startupProbe("Calling primaryStage.show()");
     primaryStage.show();
+    primaryStage.toFront();
+    primaryStage.requestFocus();
   }
 
-
-  public static void main(String[] args) {
-    launch(args);
+  private static void startupProbe(String message) {
+    String line = "[startup] " + message + System.lineSeparator();
+    System.err.print(line);
+    try {
+      Files.writeString(STARTUP_TRACE_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+    } catch (IOException e) {
+      System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+    }
   }
 }

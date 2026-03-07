@@ -8,10 +8,12 @@ import static io.botsteve.dependencyanalyzer.utils.Utils.getRepositoriesPath;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -20,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import javafx.concurrent.Task;
 import javafx.scene.control.Label;
@@ -36,12 +40,19 @@ import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Downloads selected dependency repositories and resolves checkout tags.
+ *
+ * <p>The task supports retry/mirror logic, structured status reporting, and native-safe git CLI
+ * paths for clone/fetch/checkout operations.</p>
+ */
 public class DependencyDownloaderTask extends Task<Map<String, String>> {
 
   private static final Logger log = LoggerFactory.getLogger(DependencyDownloaderTask.class);
   private static final int MAX_RETRIES_PER_URL = 2;
   private static final long[] RETRY_BACKOFF_MS = {500L, 1500L};
   private static final int MAX_HTTP_REDIRECTS = 5;
+  private static final long GIT_COMMAND_TIMEOUT_SECONDS = 300L;
   private static final TransportConfigCallback TRANSPORT_CONFIG_CALLBACK = new NoOpTransportConfigCallback();
 
   private final List<DownloadRequest> downloadRequests;
@@ -52,13 +63,31 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
   private final java.util.concurrent.ConcurrentHashMap<String, String> repoToCheckoutTag = new java.util.concurrent.ConcurrentHashMap<>();
   private final java.util.concurrent.ConcurrentHashMap<String, String> failedDownloads = new java.util.concurrent.ConcurrentHashMap<>();
 
+  /**
+   * Immutable download request descriptor for one dependency repository.
+   *
+   * @param scmUrl repository SCM URL (or mirror chain)
+   * @param version dependency version used for tag matching
+   * @param targetDirectory local target directory for clone/fetch
+   * @param fallbackRepoName artifact-based fallback name when URL parsing is insufficient
+   */
   public record DownloadRequest(String scmUrl, String version, String targetDirectory, String fallbackRepoName) {
 
+    /**
+     * Convenience overload that uses an empty fallback repository name.
+     *
+     * @param scmUrl repository SCM URL (or mirror chain)
+     * @param version dependency version used for tag matching
+     * @param targetDirectory local target directory for clone/fetch
+     */
     public DownloadRequest(String scmUrl, String version, String targetDirectory) {
       this(scmUrl, version, targetDirectory, "");
     }
   }
 
+  /**
+   * Creates a downloader task using default repository target directories.
+   */
   public DependencyDownloaderTask(Map<String, String> scmToVersionRepos,
                                   ProgressBar progressBar,
                                   Label progressLabel,
@@ -68,6 +97,9 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
         progressBar, progressLabel, cleanUp, projectName);
   }
 
+  /**
+   * Creates a downloader task with explicit target directories per SCM URL.
+   */
   public DependencyDownloaderTask(Map<String, String> scmToVersionRepos,
                                   ProgressBar progressBar,
                                   Label progressLabel,
@@ -78,6 +110,9 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
         progressBar, progressLabel, cleanUp, projectName);
   }
 
+  /**
+   * Creates a downloader task with explicit target directories and fallback repository names.
+   */
   public DependencyDownloaderTask(Map<String, String> scmToVersionRepos,
                                   ProgressBar progressBar,
                                   Label progressLabel,
@@ -89,6 +124,9 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
         progressBar, progressLabel, cleanUp, projectName);
   }
 
+  /**
+   * Creates a downloader task from pre-built immutable download requests.
+   */
   public DependencyDownloaderTask(List<DownloadRequest> downloadRequests,
                                   ProgressBar progressBar,
                                   Label progressLabel,
@@ -149,6 +187,11 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
     progressLabel.setVisible(false);
   }
 
+  /**
+   * Executes cleanup, download, and checkout flow for all requested repositories.
+   *
+   * @return map of repository keys to checkout tags or failure status strings
+   */
   @Override
   protected Map<String, String> call() {
     updateMessage("Cleaning up previous downloaded repositories");
@@ -189,10 +232,10 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
 
         String checkoutTagStr;
         try {
-          checkoutTagStr = checkoutTag(localRepoDir, request.version());
+          checkoutTagStr = checkoutTagWithFallback(localRepoDir, request.version(), scmUrl);
         } catch (Exception checkoutException) {
           String details = "repo=" + repoName + " url=" + scmUrl + " message=" + Objects.toString(checkoutException.getMessage(), "Unknown error");
-          String status = OperationStatus.failure("TAG_MISS", operationId, startNanos, details);
+          String status = OperationStatus.failure(classifyFailureCode(checkoutException, true), operationId, startNanos, details);
           failures.put(repoKey, status);
           failedDownloads.put(repoKey, status);
           repoToCheckoutTag.put(repoKey, status);
@@ -212,7 +255,12 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
     });
 
     if (!downloadRequests.isEmpty() && failures.size() == downloadRequests.size()) {
-      throw new DependencyAnalyzerException("Failed to download all selected dependencies. Check logs for details.");
+      String details = formatFailedDependencies(failures);
+      String message = "Failed to download all selected dependencies. Check logs for details.";
+      if (!details.isBlank()) {
+        message = message + "\n\n" + details;
+      }
+      throw new DependencyAnalyzerException(message);
     }
 
     return repoToCheckoutTag;
@@ -290,7 +338,16 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
     return new DownloadResult(false, OperationStatus.failure(code, operationId, startNanos, details));
   }
 
+  /**
+   * Performs clone/fetch using native-aware strategy:
+   * JGit on JVM and CLI git on native runtime.
+   */
   private void cloneOrFetchRepository(String scmUrl, File localRepoDir) throws Exception {
+    if (shouldTryCliGitFallback()) {
+      cloneOrFetchWithGitCli(scmUrl, localRepoDir);
+      return;
+    }
+
     boolean repoReady = false;
     if (!cleanUp && localRepoDir.exists() && new File(localRepoDir, ".git").exists()) {
       try (Git git = Git.open(localRepoDir)) {
@@ -298,26 +355,194 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
         git.fetch().setTagOpt(TagOpt.FETCH_TAGS).setTransportConfigCallback(TRANSPORT_CONFIG_CALLBACK).call();
         repoReady = true;
       } catch (Exception e) {
-        log.warn("Failed to reuse repository {}: {}", localRepoDir, e.getMessage());
-        ForceDeleteUtil.forceDeleteDirectory(localRepoDir.toPath());
+        if (shouldTryCliGitFallback()) {
+          log.warn("JGit fetch failed for {}. Falling back to git CLI: {}", localRepoDir, e.getMessage());
+          runGitCommand(localRepoDir.getParentFile(), "git", "-C", localRepoDir.getAbsolutePath(), "fetch", "--tags", "--prune");
+          repoReady = true;
+        } else {
+          log.warn("Failed to reuse repository {}: {}", localRepoDir, e.getMessage());
+          ForceDeleteUtil.forceDeleteDirectory(localRepoDir.toPath());
+        }
       }
     } else if (localRepoDir.exists()) {
       ForceDeleteUtil.forceDeleteDirectory(localRepoDir.toPath());
     }
 
     if (!repoReady) {
-      try (Git git = Git.cloneRepository()
-          .setURI(scmUrl)
-          .setDirectory(localRepoDir)
-          .setCloneAllBranches(true)
-          .setDepth(1)
-          .setTransportConfigCallback(TRANSPORT_CONFIG_CALLBACK)
-          .call()) {
-        log.info("Repository cloned successfully: {}", scmUrl);
+      try {
+        try (Git git = Git.cloneRepository()
+            .setURI(scmUrl)
+            .setDirectory(localRepoDir)
+            .setCloneAllBranches(true)
+            .setDepth(1)
+            .setTransportConfigCallback(TRANSPORT_CONFIG_CALLBACK)
+            .call()) {
+          log.info("Repository cloned successfully: {}", scmUrl);
+        }
+      } catch (Exception cloneException) {
+        if (!shouldTryCliGitFallback()) {
+          throw cloneException;
+        }
+        log.warn("JGit clone failed for {}. Falling back to git CLI: {}", scmUrl, cloneException.getMessage());
+        if (localRepoDir.exists()) {
+          ForceDeleteUtil.forceDeleteDirectory(localRepoDir.toPath());
+        }
+        runGitCommand(localRepoDir.getParentFile(),
+            "git", "clone", "--depth", "1", "--no-single-branch", "--tags", scmUrl, localRepoDir.getAbsolutePath());
       }
     }
   }
 
+  private void cloneOrFetchWithGitCli(String scmUrl, File localRepoDir) throws Exception {
+    if (!cleanUp && localRepoDir.exists() && new File(localRepoDir, ".git").exists()) {
+      runGitCommand(localRepoDir, "git", "fetch", "--tags", "--prune");
+      return;
+    }
+    if (localRepoDir.exists()) {
+      ForceDeleteUtil.forceDeleteDirectory(localRepoDir.toPath());
+    }
+    runGitCommand(localRepoDir.getParentFile(),
+        "git", "clone", "--depth", "1", "--no-single-branch", "--tags", scmUrl, localRepoDir.getAbsolutePath());
+  }
+
+  /**
+   * Resolves and checks out a tag using native-safe fallback rules.
+   */
+  private String checkoutTagWithFallback(File localRepoDir, String version, String scmUrl) throws Exception {
+    if (shouldTryCliGitFallback()) {
+      return checkoutTagWithGitCli(localRepoDir, version);
+    }
+    try {
+      return checkoutTag(localRepoDir, version);
+    } catch (Exception jgitCheckoutException) {
+      if (!shouldTryCliGitFallback()) {
+        throw jgitCheckoutException;
+      }
+      log.warn("JGit checkout failed for {}. Falling back to git CLI: {}", scmUrl, jgitCheckoutException.getMessage());
+      return checkoutTagWithGitCli(localRepoDir, version);
+    }
+  }
+
+  private String checkoutTagWithGitCli(File localRepoDir, String version) throws Exception {
+    List<String> matchingTags = findMatchingTagsWithGitCli(localRepoDir, version);
+    if (matchingTags.isEmpty()) {
+      runGitCommand(localRepoDir, "git", "fetch", "--tags", "--prune");
+      matchingTags = findMatchingTagsWithGitCli(localRepoDir, version);
+    }
+    if (matchingTags.isEmpty()) {
+      throw new DependencyAnalyzerException(
+          String.format("No tags found matching the pattern for repo %s with version %s", localRepoDir.getName(), version));
+    }
+    String tagName = matchingTags.getFirst();
+    runGitCommand(localRepoDir, "git", "checkout", "--force", "--detach", "refs/tags/" + tagName);
+    return "refs/tags/" + tagName;
+  }
+
+  private List<String> findMatchingTagsWithGitCli(File localRepoDir, String version) throws Exception {
+    String output = runGitCommand(localRepoDir,
+        "git",
+        "for-each-ref",
+        "--sort=-creatordate",
+        "--format=%(refname:short)",
+        "refs/tags");
+    if (output.isBlank()) {
+      return List.of();
+    }
+    return output.lines()
+        .map(String::trim)
+        .filter(tag -> !tag.isBlank())
+        .filter(tag -> CheckoutTagsTask.versionsMatch(version, tag))
+        .toList();
+  }
+
+  private static boolean shouldTryCliGitFallback() {
+    return isNativeRuntime();
+  }
+
+  static boolean isNativeRuntime() {
+    try {
+      Class<?> imageInfo = Class.forName("org.graalvm.nativeimage.ImageInfo");
+      Object result = imageInfo.getMethod("inImageRuntimeCode").invoke(null);
+      return result instanceof Boolean && (Boolean) result;
+    } catch (Exception ignored) {
+      return false;
+    }
+  }
+
+  private static String runGitCommand(File workingDirectory, String... command) throws Exception {
+    ProcessBuilder processBuilder = new ProcessBuilder(command);
+    if (workingDirectory != null) {
+      processBuilder.directory(workingDirectory);
+    }
+    processBuilder.redirectErrorStream(true);
+    Process process = processBuilder.start();
+
+    CompletableFuture<String> outputFuture = CompletableFuture.supplyAsync(() -> {
+      try (InputStream inputStream = process.getInputStream()) {
+        return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+      } catch (IOException e) {
+        return "";
+      }
+    });
+
+    boolean finished;
+    try {
+      finished = process.waitFor(GIT_COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      process.destroyForcibly();
+      Thread.currentThread().interrupt();
+      throw new DependencyAnalyzerException("Interrupted while waiting for git command: " + String.join(" ", command), e);
+    }
+
+    if (!finished) {
+      process.destroyForcibly();
+      try {
+        process.waitFor(5, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      String timeoutOutput;
+      try {
+        timeoutOutput = outputFuture.get(2, TimeUnit.SECONDS);
+      } catch (Exception ignored) {
+        timeoutOutput = "";
+      }
+      throw new DependencyAnalyzerException(
+          "Git command timed out: " + String.join(" ", command) + "\n" + trimOutput(timeoutOutput));
+    }
+
+    String output;
+    try {
+      output = outputFuture.get(2, TimeUnit.SECONDS);
+    } catch (Exception ignored) {
+      output = "";
+    }
+
+    if (process.exitValue() != 0) {
+      throw new DependencyAnalyzerException(
+          "Git command failed (exit=" + process.exitValue() + "): " + String.join(" ", command)
+              + "\n" + trimOutput(output));
+    }
+    return output;
+  }
+
+  private static String trimOutput(String output) {
+    if (output == null) {
+      return "";
+    }
+    String normalized = output.trim();
+    if (normalized.length() <= 600) {
+      return normalized;
+    }
+    return normalized.substring(0, 600) + "...";
+  }
+
+  /**
+   * Splits mirror chains into clone candidates while preserving original order.
+   *
+   * @param rawScmUrl single URL or pipe-separated mirror chain
+   * @return ordered clone candidates
+   */
   static List<String> buildMirrorCandidates(String rawScmUrl) {
     if (rawScmUrl == null || rawScmUrl.isBlank()) {
       return List.of();
@@ -344,13 +569,23 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
     }
   }
 
+  /**
+   * Classifies a failure into operational status taxonomy used in UI and logs.
+   *
+   * @param throwable root failure
+   * @param checkoutPhase whether the failure happened during checkout/tag resolution
+   * @return normalized failure code
+   */
   static String classifyFailureCode(Throwable throwable, boolean checkoutPhase) {
     if (throwable == null) {
-      return checkoutPhase ? "TAG_MISS" : "NETWORK_FAILURE";
+      return checkoutPhase ? "CHECKOUT_FAILURE" : "NETWORK_FAILURE";
     }
     String message = Objects.toString(throwable.getMessage(), "").toLowerCase();
-    if (checkoutPhase || (message.contains("tag") && message.contains("not"))) {
+    if (message.contains("no tags found") || (message.contains("tag") && message.contains("not"))) {
       return "TAG_MISS";
+    }
+    if (message.contains("enumerated values of type") || message.contains("not available")) {
+      return "NATIVE_RUNTIME";
     }
     if (message.contains("auth") || message.contains("401") || message.contains("403") || message.contains("not authorized")) {
       return "AUTH_FAILURE";
@@ -364,13 +599,22 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
     if (message.contains("redirect")) {
       return "REDIRECT_BLOCKED";
     }
+    if (checkoutPhase) {
+      return "CHECKOUT_FAILURE";
+    }
     return "NETWORK_FAILURE";
   }
 
+  /**
+   * Returns whether a failure code should trigger retry on the same mirror URL.
+   */
   static boolean isRetryable(String code) {
     return "NETWORK_FAILURE".equals(code) || "TIMEOUT".equals(code) || "DNS_FAILURE".equals(code);
   }
 
+  /**
+   * Resolves a stable repository directory name from SCM URL and fallback artifact name.
+   */
   static String resolveRepoDirectoryName(String scmUrl, String fallbackRepoName) {
     String repoName = ScmUrlUtils.resolveRepoName(scmUrl, fallbackRepoName);
     if (repoName == null || repoName.isBlank()) {
@@ -384,6 +628,9 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
     return sanitizedFallback.isBlank() ? "unknown-repo" : sanitizedFallback;
   }
 
+  /**
+   * Builds end-user summary for downloader completion with success/failure counts.
+   */
   static String buildDownloadSummaryMessage(int totalRequests, Map<String, String> failures) {
     int failed = failures == null ? 0 : failures.size();
     int succeeded = Math.max(0, totalRequests - failed);
@@ -415,9 +662,13 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
       }
       String repoName = repoNameFromRepoKey(entry.getKey());
       String code = failureCode(entry.getValue());
+      String reason = failureReason(entry.getValue());
       sb.append("- ").append(repoName);
       if (!code.isBlank()) {
         sb.append(" (").append(code).append(')');
+      }
+      if (!reason.isBlank()) {
+        sb.append(" - ").append(reason);
       }
       sb.append('\n');
       shown++;
@@ -454,6 +705,24 @@ public class DependencyDownloaderTask extends Task<Map<String, String>> {
       end = status.length();
     }
     return status.substring("FAILED:".length(), end);
+  }
+
+  private static String failureReason(String status) {
+    if (status == null || status.isBlank()) {
+      return "";
+    }
+    int messageIndex = status.indexOf(" message=");
+    if (messageIndex < 0) {
+      return "";
+    }
+    String reason = status.substring(messageIndex + " message=".length()).trim();
+    if (reason.isBlank()) {
+      return "";
+    }
+    if (reason.length() > 120) {
+      return reason.substring(0, 120) + "...";
+    }
+    return reason;
   }
 
   private record DownloadResult(boolean success, String message) {

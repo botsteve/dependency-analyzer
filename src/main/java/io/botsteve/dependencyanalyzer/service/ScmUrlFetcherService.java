@@ -22,6 +22,16 @@ public class ScmUrlFetcherService {
   private static final String MAVEN_OPTS = "-DincludeTestScope=true -DoutputFormat=json";
   private static final String SCM_URL_NOT_FOUND = "SCM URL not found";
 
+  /**
+   * Generates CycloneDX BOM for a Maven project and populates dependency SCM URLs from it.
+   *
+   * @param projectDir Maven project directory
+   * @param dependencies dependency nodes that will be updated in place
+   * @throws ParserConfigurationException when XML parser setup fails
+   * @throws IOException when BOM reading fails
+   * @throws SAXException when BOM parsing fails
+   * @throws MavenInvocationException when Maven execution fails
+   */
   public static void fetchScmUrls(String projectDir, Set<DependencyNode> dependencies)
       throws ParserConfigurationException, IOException, SAXException, MavenInvocationException {
     getMavenInvokerResult(projectDir, "", CYCLONEDX_MAVEN, MAVEN_OPTS, System.getenv("JAVA_HOME"));

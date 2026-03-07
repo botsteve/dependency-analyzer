@@ -1,0 +1,9 @@
+[
+  {
+    "name": "java.lang.Runnable",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  }
+]

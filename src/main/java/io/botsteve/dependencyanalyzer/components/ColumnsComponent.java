@@ -25,6 +25,9 @@ public class ColumnsComponent {
     this();
   }
 
+  /**
+   * Creates output/build-status column with double-click popup for full content.
+   */
   public TreeTableColumn<DependencyNode, String> getBuildWithColumn() {
     TreeTableColumn<DependencyNode, String> buildWithColumn = new TreeTableColumn<>("Output");
     buildWithColumn.setCellValueFactory(param -> getSimpleStringProperty(param.getValue().getValue().getBuildWith()));
@@ -65,12 +68,18 @@ public class ColumnsComponent {
     return buildWithColumn;
   }
 
+  /**
+   * Creates checkout-tag column.
+   */
   public TreeTableColumn<DependencyNode, String> getCheckoutTagColumn() {
     TreeTableColumn<DependencyNode, String> checkoutTag = new TreeTableColumn<>("Repo checkout tag");
     checkoutTag.setCellValueFactory(param -> getSimpleStringProperty(param.getValue().getValue().getCheckoutTag()));
     return checkoutTag;
   }
 
+  /**
+   * Creates SCM URL column with hyperlink opening behavior.
+   */
   public TreeTableColumn<DependencyNode, String> getSCMTreeTableColumn() {
     TreeTableColumn<DependencyNode, String> scmColumn = new TreeTableColumn<>("SCM URL");
     scmColumn.setCellValueFactory(param -> getSimpleStringProperty(getSCMColumnValue(param)));
@@ -116,6 +125,9 @@ public class ColumnsComponent {
     return scmColumn;
   }
 
+  /**
+   * Creates selection checkbox column and visual style differentiation for dependency depth.
+   */
   public TreeTableColumn<DependencyNode, Boolean> getSelectTreeTableColumn() {
     TreeTableColumn<DependencyNode, Boolean> selectColumn = new TreeTableColumn<>("Select");
     selectColumn.setCellValueFactory(param -> param.getValue().getValue().selectedProperty());
@@ -186,12 +198,18 @@ public class ColumnsComponent {
     return selectColumn;
   }
 
+  /**
+   * Creates dependency GAV column.
+   */
   public TreeTableColumn<DependencyNode, String> getDependencyTreeTableColumn() {
     TreeTableColumn<DependencyNode, String> dependencyColumn = new TreeTableColumn<>("Dependency");
     dependencyColumn.setCellValueFactory(param -> getSimpleStringProperty(getDependencyColumnValue(param)));
     return dependencyColumn;
   }
 
+  /**
+   * Creates dependency scope column.
+   */
   public TreeTableColumn<DependencyNode, String> getScopeColumn() {
     TreeTableColumn<DependencyNode, String> scopeColumn = new TreeTableColumn<>("Scope");
     scopeColumn.setCellValueFactory(param -> {
@@ -217,6 +235,9 @@ public class ColumnsComponent {
     return new SimpleStringProperty(value);
   }
 
+  /**
+   * Applies preferred width layout for table columns.
+   */
   public void configureColumnsWidthStyle(TreeTableColumn<DependencyNode, Boolean> selectColumn,
                                          TreeTableColumn<DependencyNode, String> dependencyColumn,
                                          TreeTableColumn<DependencyNode, String> scopeColumn,

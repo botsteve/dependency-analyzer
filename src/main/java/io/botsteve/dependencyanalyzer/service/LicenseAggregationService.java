@@ -44,6 +44,11 @@ public class LicenseAggregationService {
 
   private final Path repositoriesRoot;
 
+  /**
+   * Creates a license aggregation service scoped to one analyzed project.
+   *
+   * @param projectName project name used to resolve downloaded repository directories
+   */
   public LicenseAggregationService(String projectName) {
     this.repositoriesRoot = Path.of(getRepositoriesPath(projectName));
   }
@@ -52,6 +57,12 @@ public class LicenseAggregationService {
     this(null);
   }
 
+  /**
+   * Builds an aggregated public license report for selected dependencies and their transitive children.
+   *
+   * @param selectedDependencies selected third-party dependencies
+   * @return markdown report containing license, notice, and copyright sections
+   */
   public String generatePublicLicenseReport(Collection<DependencyNode> selectedDependencies) {
     if (selectedDependencies == null || selectedDependencies.isEmpty()) {
       return REPORT_TITLE + "\n\nNo dependencies selected.";

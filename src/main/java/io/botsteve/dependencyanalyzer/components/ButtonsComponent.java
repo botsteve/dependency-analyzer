@@ -6,6 +6,7 @@ import static io.botsteve.dependencyanalyzer.utils.FxUtils.showError;
 import static io.botsteve.dependencyanalyzer.utils.Utils.arePropertiesConfiguredAndValid;
 import static io.botsteve.dependencyanalyzer.utils.Utils.collectLatestVersions;
 import static io.botsteve.dependencyanalyzer.utils.Utils.getFourthPartyRepositoriesPath;
+import static io.botsteve.dependencyanalyzer.utils.Utils.getMissingOrInvalidJdkSettings;
 import static io.botsteve.dependencyanalyzer.utils.Utils.getThirdPartyRepositoriesPath;
 
 import java.io.File;
@@ -22,12 +23,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
+import javafx.scene.control.Alert;
 import javafx.collections.FXCollections;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.ToolBar;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -35,13 +41,21 @@ import io.botsteve.dependencyanalyzer.model.DependencyNode;
 import io.botsteve.dependencyanalyzer.tasks.BuildRepositoriesTask;
 import io.botsteve.dependencyanalyzer.tasks.DependencyDownloaderTask;
 import io.botsteve.dependencyanalyzer.tasks.DependencyLoadingTask;
+import io.botsteve.dependencyanalyzer.tasks.JdkDownloadTask;
+import io.botsteve.dependencyanalyzer.utils.LogUtils;
 import io.botsteve.dependencyanalyzer.service.LicenseAggregationService;
 import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
+import io.botsteve.dependencyanalyzer.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ButtonsComponent {
 
+  private static final Logger log = LoggerFactory.getLogger(ButtonsComponent.class);
+
   private static AtomicBoolean isDownloaded = new AtomicBoolean(false);
   private final javafx.beans.property.BooleanProperty isTaskRunning = new javafx.beans.property.SimpleBooleanProperty(false);
+  private final javafx.beans.property.BooleanProperty isJdkDownloadRunning = new javafx.beans.property.SimpleBooleanProperty(false);
   private final TableViewComponent tableViewComponent;
   private Task<?> activeTask;
 
@@ -49,30 +63,66 @@ public class ButtonsComponent {
     this.tableViewComponent = tableViewComponent;
   }
 
+  /**
+   * Builds the main application toolbar and wires task-state gating for all actions.
+   */
   public ToolBar getToolBar(Stage primaryStage, ProgressBar progressBar, Label progressLabel) {
     var openButton = createOpenDirectoryButton(primaryStage, progressBar, progressLabel);
     var downloadThirdPartyButton = createDownloadThirdPartyButton(progressBar, progressLabel);
     var downloadFourthPartyButton = createDownloadFourthPartyButton(progressBar, progressLabel);
+    var downloadJdksButton = createDownloadRequiredJdksButton(progressBar, progressLabel);
     var buildSelectedButton = createBuildSelectedButton(progressBar, progressLabel);
     var buildAggregatedLicenseButton = createBuildAggregatedLicenseButton(progressBar, progressLabel);
 
     openButton.setTooltip(new Tooltip("Open a Maven/Gradle project directory and load dependencies"));
     downloadThirdPartyButton.setTooltip(new Tooltip("Download selected direct 3rd-party dependencies"));
     downloadFourthPartyButton.setTooltip(new Tooltip("Download 4th-party dependencies for selected 3rd-party roots"));
+    downloadJdksButton.setTooltip(new Tooltip("Download and auto-configure required JDKs (8, 11, 17, 21)"));
     buildSelectedButton.setTooltip(new Tooltip("Build selected downloaded 3rd-party dependencies"));
     buildAggregatedLicenseButton.setTooltip(new Tooltip("Generate a consolidated license notice for selected dependencies"));
     
     openButton.disableProperty().bind(isTaskRunning);
     downloadThirdPartyButton.disableProperty().bind(isTaskRunning);
     downloadFourthPartyButton.disableProperty().bind(isTaskRunning);
+    downloadJdksButton.disableProperty().bind(isTaskRunning);
     buildSelectedButton.disableProperty().bind(isTaskRunning);
     buildAggregatedLicenseButton.disableProperty().bind(isTaskRunning);
     tableViewComponent.getCleanUpCheckBox().disableProperty().bind(isTaskRunning);
+
+    Region spacer = new Region();
+    HBox.setHgrow(spacer, Priority.ALWAYS);
     
-    return new ToolBar(openButton, downloadThirdPartyButton, downloadFourthPartyButton, buildSelectedButton,
-                       buildAggregatedLicenseButton);
+    return new ToolBar(openButton,
+        downloadThirdPartyButton,
+        downloadFourthPartyButton,
+        buildSelectedButton,
+        buildAggregatedLicenseButton,
+        spacer,
+        downloadJdksButton);
   }
 
+  /**
+   * Exposes read-only state used to disable conflicting UI actions during JDK bootstrap.
+   */
+  public javafx.beans.property.ReadOnlyBooleanProperty jdkDownloadRunningProperty() {
+    return isJdkDownloadRunning;
+  }
+
+  /**
+   * Creates the "Download Required JDKs" action button.
+   */
+  public Button createDownloadRequiredJdksButton(ProgressBar progressBar, Label progressLabel) {
+    Button downloadButton = new Button("Download Required JDKs");
+    downloadButton.setStyle("-fx-background-color: #1e73ff; -fx-text-fill: white; -fx-border-color: #1e73ff; -fx-font-weight: bold;");
+    downloadButton.setOnAction(event -> {
+      startJdkDownload(progressBar, progressLabel, new LinkedHashSet<>(Utils.REQUIRED_JDK_SETTINGS));
+    });
+    return downloadButton;
+  }
+
+  /**
+   * Creates the "Download 4th Party" action button and associated download workflow.
+   */
   public Button createDownloadFourthPartyButton(ProgressBar progressBar, Label progressLabel) {
     Button downloadButton = new Button("Download 4th Party");
     downloadButton.setOnAction(event -> {
@@ -155,6 +205,9 @@ public class ButtonsComponent {
     }
   }
 
+  /**
+   * Creates the "Create Aggregated License" action button.
+   */
   public Button createBuildAggregatedLicenseButton(ProgressBar progressBar, Label progressLabel) {
     Button buildButton = new Button("Create Aggregated License");
     buildButton.setOnAction(event -> {
@@ -195,6 +248,9 @@ public class ButtonsComponent {
     return buildButton;
   }
 
+  /**
+   * Creates the "Build Selected 3rd Party" action button.
+   */
   public Button createBuildSelectedButton(ProgressBar progressBar, Label progressLabel) {
     Button buildButton = new Button("Build Selected 3rd Party");
     buildButton.setOnAction(event -> {
@@ -227,6 +283,9 @@ public class ButtonsComponent {
     return buildButton;
   }
 
+  /**
+   * Creates the "Download 3rd Party" action button.
+   */
   public Button createDownloadThirdPartyButton(ProgressBar progressBar, Label progressLabel) {
     Button downloadButton = new Button("Download 3rd Party");
     downloadButton.setOnAction(event -> {
@@ -289,6 +348,9 @@ public class ButtonsComponent {
         .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
+  /**
+   * Creates the "Open Directory" action button and project loading workflow.
+   */
   public Button createOpenDirectoryButton(Stage primaryStage, ProgressBar progressBar, Label progressLabel) {
     Button openButton = new Button("Open Directory");
     openButton.setOnAction(event -> {
@@ -327,10 +389,67 @@ public class ButtonsComponent {
           tableViewComponent.setAllDependencies(FXCollections.observableSet(task.getValue()));
           tableViewComponent.updateTreeView(tableViewComponent.getAllDependencies());
           tableViewComponent.updateTreeViewWithFilteredDependencies(tableViewComponent.getFilterInput().getText());
+          showJdkConfigurationWarningIfNeeded(progressBar, progressLabel);
         });
       }
     });
     return openButton;
+  }
+
+  private void showJdkConfigurationWarningIfNeeded(ProgressBar progressBar, Label progressLabel) {
+    List<String> missingOrInvalid = getMissingOrInvalidJdkSettings();
+    if (missingOrInvalid.isEmpty()) {
+      return;
+    }
+
+    Alert alert = new Alert(Alert.AlertType.WARNING);
+    alert.setTitle("JDK settings not configured");
+    alert.setHeaderText("Required JDK paths are missing or invalid");
+    alert.setContentText("The following settings are not configured correctly: "
+        + String.join(", ", missingOrInvalid)
+        + "\n\nUse the 'Download Required JDKs' button to install and configure them automatically.");
+
+    ButtonType downloadType = new ButtonType("Download Required JDKs");
+    ButtonType closeType = ButtonType.CANCEL;
+    alert.getButtonTypes().setAll(downloadType, closeType);
+    alert.showAndWait().ifPresent(selected -> {
+      if (selected == downloadType) {
+        startJdkDownload(progressBar, progressLabel, new LinkedHashSet<>(missingOrInvalid));
+      }
+    });
+  }
+
+  private void startJdkDownload(ProgressBar progressBar, Label progressLabel, Set<String> requestedJdks) {
+    if (requestedJdks == null || requestedJdks.isEmpty()) {
+      showAlert("All required JDK settings are already configured.");
+      return;
+    }
+
+    JdkDownloadTask task = new JdkDownloadTask(requestedJdks);
+    runManagedTask(task, progressBar, progressLabel, () -> {
+      progressBar.setVisible(false);
+      progressLabel.setVisible(false);
+      Map<String, String> downloaded = task.getValue();
+      if (downloaded == null || downloaded.isEmpty()) {
+        showAlert("No JDKs were downloaded.");
+        return;
+      }
+      String summary = downloaded.entrySet().stream()
+          .map(entry -> "- " + entry.getKey() + " = " + entry.getValue())
+          .collect(Collectors.joining("\n"));
+      if (downloaded.containsKey("JAVA8_HOME") && isArmHostArchitecture()) {
+        summary = summary + "\n\nNote: " + JdkDownloadTask.java8X64Explanation();
+      }
+      showAlert("JDK download completed and config/env-settings.properties updated:\n" + summary);
+    });
+  }
+
+  /**
+   * Returns whether current host architecture is ARM/aarch64.
+   */
+  static boolean isArmHostArchitecture() {
+    String arch = System.getProperty("os.arch", "").toLowerCase(java.util.Locale.ROOT);
+    return arch.contains("arm") || arch.contains("aarch64");
   }
 
 
@@ -372,6 +491,9 @@ public class ButtonsComponent {
     return repositories != null && repositories.length > 0;
   }
 
+  /**
+   * Returns user-facing build gate message for selection/download preconditions.
+   */
   static String evaluateBuildGateMessage(boolean noSelection, boolean downloaded) {
     if (noSelection) {
       return "No 3rd-party dependencies selected!";
@@ -459,23 +581,38 @@ public class ButtonsComponent {
                               ProgressBar progressBar,
                               Label progressLabel,
                               Runnable onSuccess) {
+    final boolean jdkTask = task instanceof JdkDownloadTask;
+    progressBar.progressProperty().unbind();
+    progressLabel.textProperty().unbind();
     if (activeTask != null) {
       progressBar.progressProperty().unbind();
       progressLabel.textProperty().unbind();
     }
     activeTask = task;
     isTaskRunning.set(true);
+    if (jdkTask) {
+      isJdkDownloadRunning.set(true);
+    }
 
     progressBar.setVisible(true);
     progressLabel.setVisible(true);
+    if (jdkTask) {
+      progressBar.setProgress(0.0);
+      progressLabel.setText("Preparing JDK downloads...");
+    } else {
+      progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+      progressLabel.setText("Starting " + task.getClass().getSimpleName() + "...");
+    }
     progressBar.progressProperty().bind(task.progressProperty());
-    progressLabel.textProperty().unbind();
     progressLabel.textProperty().bind(task.messageProperty());
 
     task.setOnSucceeded(event -> {
       progressBar.progressProperty().unbind();
       progressLabel.textProperty().unbind();
       isTaskRunning.set(false);
+      if (jdkTask) {
+        isJdkDownloadRunning.set(false);
+      }
       if (onSuccess != null) {
         onSuccess.run();
       }
@@ -485,9 +622,14 @@ public class ButtonsComponent {
       progressBar.progressProperty().unbind();
       progressLabel.textProperty().unbind();
       isTaskRunning.set(false);
+      if (jdkTask) {
+        isJdkDownloadRunning.set(false);
+      }
       Throwable ex = task.getException();
-      if (ex != null && !(task instanceof DependencyDownloaderTask) && !(task instanceof BuildRepositoriesTask)) {
-        getErrorAlertAndCloseProgressBar(ex.getMessage(), progressBar, progressLabel);
+      log.error("Task {} failed", task == null ? "unknown" : task.getClass().getSimpleName(), ex);
+      if (!(task instanceof DependencyDownloaderTask) && !(task instanceof BuildRepositoriesTask)) {
+        String failureMessage = buildTaskFailureMessage(task, ex);
+        getErrorAlertAndCloseProgressBar(failureMessage, progressBar, progressLabel);
       }
     });
 
@@ -495,10 +637,42 @@ public class ButtonsComponent {
       progressBar.progressProperty().unbind();
       progressLabel.textProperty().unbind();
       isTaskRunning.set(false);
+      if (jdkTask) {
+        isJdkDownloadRunning.set(false);
+      }
       progressBar.setVisible(false);
       progressLabel.setVisible(false);
     });
 
-    new Thread(task).start();
+    Thread worker = new Thread(task, task.getClass().getSimpleName() + "-worker");
+    worker.setDaemon(true);
+    worker.start();
+  }
+
+  /**
+   * Builds a detailed task failure message including root cause and log file path.
+   */
+  static String buildTaskFailureMessage(Task<?> task, Throwable ex) {
+    String taskName = task == null ? "Task" : task.getClass().getSimpleName();
+    String topMessage = (ex == null || ex.getMessage() == null || ex.getMessage().isBlank())
+        ? "Unknown error"
+        : ex.getMessage();
+
+    Throwable root = ex;
+    while (root != null && root.getCause() != null && root.getCause() != root) {
+      root = root.getCause();
+    }
+    String rootMessage = (root == null || root.getMessage() == null || root.getMessage().isBlank())
+        ? ""
+        : root.getMessage();
+
+    StringBuilder message = new StringBuilder(taskName)
+        .append(" failed: ")
+        .append(topMessage);
+    if (!rootMessage.isBlank() && !rootMessage.equals(topMessage)) {
+      message.append("\nRoot cause: ").append(rootMessage);
+    }
+    message.append("\nCheck logs: ").append(LogUtils.getDefaultLogFilePath());
+    return message.toString();
   }
 }

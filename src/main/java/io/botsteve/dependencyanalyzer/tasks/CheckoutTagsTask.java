@@ -19,6 +19,11 @@ import io.botsteve.dependencyanalyzer.exception.DependencyAnalyzerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Tag resolution helper for dependency source repositories.
+ *
+ * <p>The logic normalizes dependency version tokens and tries to select the newest matching tag.</p>
+ */
 public class CheckoutTagsTask {
 
   private static final Logger log = LoggerFactory.getLogger(CheckoutTagsTask.class);
@@ -26,6 +31,15 @@ public class CheckoutTagsTask {
   private static final String NO_TAG_FOUND = "No tags found matching the pattern for repo %s with version %s";
   private static final Pattern VERSION_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+){1,3}(?:[-._A-Za-z0-9+]*)?)");
 
+  /**
+   * Resolves and checks out the best matching tag for a dependency version.
+   *
+   * @param file local git repository directory
+   * @param version dependency version token
+   * @return full ref name of the checked-out tag (for example {@code refs/tags/v1.2.3})
+   * @throws GitAPIException when JGit operations fail
+   * @throws IOException when repository metadata cannot be read
+   */
   public static String checkoutTag(File file, String version) throws GitAPIException, IOException {
     try (Git git = Git.open(file)) {
       List<Ref> filteredSortedTags = findMatchingTags(git, version);
@@ -70,6 +84,13 @@ public class CheckoutTagsTask {
     return match;
   }
 
+  /**
+   * Compares normalized tag/version tokens using prefix-safe boundaries.
+   *
+   * @param requestedVersion dependency version requested by the user
+   * @param tagName tag candidate name
+   * @return {@code true} when tagName is a compatible version match
+   */
   static boolean versionsMatch(String requestedVersion, String tagName) {
     String normalizedTag = normalizeVersion(tagName);
     String normalizedVersion = normalizeVersion(requestedVersion);
@@ -121,6 +142,12 @@ public class CheckoutTagsTask {
     log.debug("Checked out repo {} with tag: {}", git.getRepository().getDirectory().getName(), tag.getName());
   }
 
+  /**
+   * Extracts the canonical version token from a tag or version-like string.
+   *
+   * @param version raw tag/version value
+   * @return normalized version token used for matching
+   */
   public static String normalizeVersion(String version) {
     if (version == null) {
       return "";

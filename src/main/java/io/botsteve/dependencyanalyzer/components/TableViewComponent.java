@@ -102,20 +102,32 @@ public class TableViewComponent {
     cleanUpCheckBox.setSelected(false);
   }
 
+  /**
+   * Reapplies fuzzy/exclude/scope filters against currently loaded dependencies.
+   */
   public void applyFilters() {
     if (this.allDependencies != null) {
       updateTreeView(this.allDependencies);
     }
   }
 
+  /**
+   * Refreshes tree view content after dependency metadata updates.
+   */
   public void updateTreeViewWithFilteredDependencies(String newValue) {
     applyFilters();
   }
 
+  /**
+   * Filters dependencies using fuzzy text and scope selections.
+   */
   public Set<DependencyNode> filterDependencies(String filterText, Set<String> scopes) {
     return filterDependencies(filterText, excludeFilterInput.getText(), scopes);
   }
 
+  /**
+   * Filters dependencies using fuzzy include text, exclude text, and scope selections.
+   */
   public Set<DependencyNode> filterDependencies(String fuzzyFilterText, String excludeFilterText, Set<String> scopes) {
     Set<DependencyNode> visibleRoots = new LinkedHashSet<>();
     for (DependencyNode node : sortedNodes(allDependencies)) {
@@ -142,6 +154,9 @@ public class TableViewComponent {
     return nodeScope != null && scopes.contains(nodeScope);
   }
 
+  /**
+   * Replaces current dependency model, rebinds selection propagation, and rebuilds scope menu options.
+   */
   public void setAllDependencies(ObservableSet<DependencyNode> allDependencies) {
     unregisterSelectionListeners(this.allDependencies);
     selectionListeners.clear();
@@ -319,6 +334,9 @@ public class TableViewComponent {
     }
   }
 
+  /**
+   * Rebuilds the tree table root content from provided dependencies and active filter state.
+   */
   public void updateTreeView(Set<DependencyNode> dependencies) {
     TreeItem<DependencyNode> rootItem = createRootTreeItem();
     rootItem.setExpanded(true);
@@ -441,6 +459,9 @@ public class TableViewComponent {
     this.projectName = projectName;
   }
 
+  /**
+   * Builds the filtering/selection utility bar displayed above the dependency table.
+   */
   public HBox creatToolsBox() {
     HBox box = new HBox(15);
     box.setAlignment(Pos.CENTER_LEFT);

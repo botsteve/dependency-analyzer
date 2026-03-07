@@ -30,8 +30,19 @@ public class Utils {
     public static final String DOWNLOADED_REPOS = "downloaded_repos";
     public static final String THIRD_PARTY_REPOS = "3rd-party";
     public static final String FOURTH_PARTY_REPOS = "4th-party";
-    public static final String SETTINGS_FILE_PATH = "env-settings.properties";
+    public static final String DOWNLOADED_JDKS = "downloaded_jdks";
+    public static final String CONFIG_DIRECTORY = "config";
+    public static final String SETTINGS_FILE_PATH = CONFIG_DIRECTORY + "/env-settings.properties";
+    public static final String LEGACY_SETTINGS_FILE_PATH = "env-settings.properties";
+    public static final List<String> REQUIRED_JDK_SETTINGS = List.of("JAVA8_HOME", "JAVA11_HOME", "JAVA17_HOME", "JAVA21_HOME");
 
+    /**
+     * Parses module declarations from a Maven parent POM.
+     *
+     * @param pomFile root pom.xml file
+     * @return ordered module names declared under {@code <modules>}
+     * @throws Exception when XML parsing fails
+     */
     public static List<String> parseModulesFromPom(File pomFile) throws Exception {
         List<String> modules = new ArrayList<>();
 
@@ -49,6 +60,13 @@ public class Utils {
     }
 
 
+    /**
+     * Reads the project display name from a POM file.
+     *
+     * @param pomFile pom.xml file
+     * @return project name content from the {@code <name>} element
+     * @throws Exception when XML parsing fails
+     */
     public static String getProjectName(File pomFile) throws Exception {
 
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
@@ -60,75 +78,135 @@ public class Utils {
         return nodeList.item(0).getTextContent();
     }
 
+    /**
+     * Returns a configured environment property from persisted settings.
+     *
+     * @param property setting key (for example {@code JAVA17_HOME})
+     * @return configured value or empty string when absent
+     */
     public static String getPropertyFromSetting(String property) {
         var properties = loadSettings();
         return properties.getProperty(property, "");
     }
 
+    /**
+     * Loads environment settings from {@code config/env-settings.properties}.
+     *
+     * @return loaded settings
+     */
     public static Properties loadSettings() {
         Properties properties = new Properties();
-        try (InputStream is = new FileInputStream(SETTINGS_FILE_PATH)) {
+        Path settingsPath = resolveSettingsPath();
+        migrateLegacySettingsFileIfNeeded(settingsPath);
+        try (InputStream is = new FileInputStream(settingsPath.toFile())) {
             properties.load(is);
         } catch (IOException e) {
-            // Handle file not found or other errors
-            log.error(e.getMessage());
+            log.error("Failed loading settings from {}", settingsPath, e);
             throw new DependencyAnalyzerException(e);
         }
         return properties;
     }
 
+    /**
+     * Persists environment settings from UI model rows.
+     *
+     * @param settingsList settings table rows
+     */
     public static void saveSettings(ObservableList<EnvSetting> settingsList) {
         Properties properties = new Properties();
         settingsList.forEach(setting -> properties.setProperty(setting.getName(), setting.getValue()));
 
-        try (OutputStream os = new FileOutputStream(SETTINGS_FILE_PATH)) {
-            properties.store(os, "Environment Settings");
-            log.info("Settings saved to {}", SETTINGS_FILE_PATH);
+        saveSettings(properties);
+    }
+
+    /**
+     * Persists environment settings into the canonical settings file.
+     *
+     * @param properties properties to save
+     */
+    public static void saveSettings(Properties properties) {
+        Properties safeProperties = properties == null ? new Properties() : properties;
+        Path settingsPath = resolveSettingsPath();
+        migrateLegacySettingsFileIfNeeded(settingsPath);
+        ensureConfigDirectoryExists(settingsPath);
+
+        try (OutputStream os = new FileOutputStream(settingsPath.toFile())) {
+            safeProperties.store(os, "Environment Settings");
+            log.info("Settings saved to {}", settingsPath);
         } catch (IOException e) {
-            log.error(e.getMessage());
+            log.error("Failed saving settings to {}", settingsPath, e);
             throw new DependencyAnalyzerException(e);
         }
     }
 
+    /**
+     * Validates required JDK settings and displays user-facing validation errors.
+     *
+     * @return {@code true} when required settings exist and point to valid JDK homes
+     */
     public static boolean arePropertiesConfiguredAndValid() {
-        var properties = Utils.loadSettings();
-        var java8Home = properties.getProperty("JAVA8_HOME", "");
-        var java11Home = properties.getProperty("JAVA11_HOME", "");
-        var java17Home = properties.getProperty("JAVA17_HOME", "");
-        if (java8Home.isEmpty() || java11Home.isEmpty() || java17Home.isEmpty()) {
+        var missingProperties = getMissingJdkSettings();
+        if (!missingProperties.isEmpty()) {
             showError("""
-                    Dependencies might be targeted for compilation with a different JDK version,
-                    please configure JAVA8_HOME, JAVA11_HOME & JAVA17_HOME in settings -> environment settings.
-                    """);
+                    Dependencies might be targeted for compilation with different JDK versions.
+                    Please configure or download all required JDK settings: %s
+                    (Settings -> Environment Settings or use 'Download Required JDKs').
+                    """.formatted(String.join(", ", missingProperties)));
             return false;
         }
 
-        if (isValidJdkHome(new File(java8Home))) {
+        var invalidProperties = getInvalidJdkSettings();
+        if (!invalidProperties.isEmpty()) {
             showError("""
-                    JAVA8_HOME environment variable is not a valid JAVA_HOME.
-                    JAVA8_HOME should point to the root directory path of the JDK.
-                    """);
-            return false;
-        } else if (isValidJdkHome(new File(java11Home))) {
-            showError("""
-                    JAVA11_HOME environment variable is not a valid JAVA_HOME.
-                    JAVA11_HOME should point to the root directory path of the JDK.
-                    """);
-            return false;
-        } else if (isValidJdkHome(new File(java17Home))) {
-            showError("""
-                    JAVA17_HOME environment variable is not a valid JAVA_HOME.
-                    JAVA17_HOME should point to the root directory path of the JDK.
-                    """);
+                    The following JDK settings are invalid: %s
+                    Each setting should point to the root directory path of a JDK.
+                    """.formatted(String.join(", ", invalidProperties)));
             return false;
         }
         return true;
     }
 
-    public static void createSettingsFile() {
+    /**
+     * Returns required JDK setting keys that are missing values.
+     */
+    public static List<String> getMissingJdkSettings() {
+        Properties properties = loadSettings();
+        return REQUIRED_JDK_SETTINGS.stream()
+            .filter(key -> properties.getProperty(key, "").isBlank())
+            .toList();
+    }
 
-        // Check if the file exists
-        File file = new File(SETTINGS_FILE_PATH);
+    /**
+     * Returns required JDK setting keys that point to invalid directories.
+     */
+    public static List<String> getInvalidJdkSettings() {
+        Properties properties = loadSettings();
+        return REQUIRED_JDK_SETTINGS.stream()
+            .filter(key -> {
+                String value = properties.getProperty(key, "").trim();
+                return !value.isBlank() && isInvalidJdkHome(new File(value));
+            })
+            .toList();
+    }
+
+    /**
+     * Returns required JDK setting keys that are missing or invalid.
+     */
+    public static List<String> getMissingOrInvalidJdkSettings() {
+        LinkedHashSet<String> keys = new LinkedHashSet<>(getMissingJdkSettings());
+        keys.addAll(getInvalidJdkSettings());
+        return new ArrayList<>(keys);
+    }
+
+    /**
+     * Creates the settings file if it does not already exist.
+     */
+    public static void createSettingsFile() {
+        Path settingsPath = resolveSettingsPath();
+        migrateLegacySettingsFileIfNeeded(settingsPath);
+        ensureConfigDirectoryExists(settingsPath);
+
+        File file = settingsPath.toFile();
         if (!file.exists()) {
             try {
                 Properties properties = new Properties();
@@ -136,20 +214,65 @@ public class Utils {
 
                 try (FileOutputStream fos = new FileOutputStream(file)) {
                     properties.store(fos, "Environment Settings");
-                    log.info("Properties file created successfully.");
+                    log.info("Properties file created successfully at {}", settingsPath);
                 } catch (IOException e) {
-                    log.error(e.getMessage());
+                    log.error("Failed creating settings file at {}", settingsPath, e);
                     throw new DependencyAnalyzerException(e);
                 }
             } catch (IOException e) {
-                log.error(e.getMessage());
+                log.error("Failed initializing settings file at {}", settingsPath, e);
                 throw new DependencyAnalyzerException(e);
             }
         } else {
-            log.info("Properties file already exists.");
+            log.info("Properties file already exists at {}", settingsPath);
         }
     }
 
+    private static Path resolveSettingsPath() {
+        String baseDir = System.getProperty(LogUtils.BASE_DIR_PROPERTY, System.getProperty("user.dir"));
+        return Path.of(baseDir).resolve(SETTINGS_FILE_PATH).toAbsolutePath().normalize();
+    }
+
+    private static Path resolveLegacySettingsPath() {
+        String baseDir = System.getProperty(LogUtils.BASE_DIR_PROPERTY, System.getProperty("user.dir"));
+        return Path.of(baseDir).resolve(LEGACY_SETTINGS_FILE_PATH).toAbsolutePath().normalize();
+    }
+
+    private static void ensureConfigDirectoryExists(Path settingsPath) {
+        Path parent = settingsPath.getParent();
+        if (parent == null) {
+            return;
+        }
+        try {
+            if (!Files.exists(parent)) {
+                Files.createDirectories(parent);
+            }
+        } catch (IOException e) {
+            throw new DependencyAnalyzerException("Failed to create settings directory: " + parent, e);
+        }
+    }
+
+    private static void migrateLegacySettingsFileIfNeeded(Path settingsPath) {
+        Path legacySettingsPath = resolveLegacySettingsPath();
+        if (!Files.exists(legacySettingsPath) || Files.exists(settingsPath)) {
+            return;
+        }
+        ensureConfigDirectoryExists(settingsPath);
+        try {
+            Files.move(legacySettingsPath, settingsPath);
+            log.info("Migrated legacy settings file from {} to {}", legacySettingsPath, settingsPath);
+        } catch (IOException e) {
+            throw new DependencyAnalyzerException(
+                "Failed to migrate legacy settings file from " + legacySettingsPath + " to " + settingsPath, e);
+        }
+    }
+
+    /**
+     * Resolves the base repository directory used by download/build workflows.
+     *
+     * @param projectName optional project subdirectory name
+     * @return absolute repositories directory path
+     */
     public static String getRepositoriesPath(String projectName) {
         try {
             Path codeSourcePath = Paths.get(Utils.class.getProtectionDomain().getCodeSource().getLocation().toURI());
@@ -177,18 +300,30 @@ public class Utils {
         }
     }
 
+    /**
+     * Resolves the base repository directory without project scoping.
+     */
     public static String getRepositoriesPath() {
         return getRepositoriesPath(null);
     }
 
+    /**
+     * Resolves and creates the third-party repository directory for a project.
+     */
     public static String getThirdPartyRepositoriesPath(String projectName) {
         return ensureDirectory(Path.of(getRepositoriesPath(projectName), THIRD_PARTY_REPOS)).toString();
     }
 
+    /**
+     * Resolves and creates the fourth-party repository root for a project.
+     */
     public static String getFourthPartyRepositoriesPath(String projectName) {
         return ensureDirectory(Path.of(getRepositoriesPath(projectName), FOURTH_PARTY_REPOS)).toString();
     }
 
+    /**
+     * Resolves and creates the fourth-party directory for one third-party parent repository.
+     */
     public static String getFourthPartyRepositoriesPath(String projectName, String thirdPartyRepoName) {
         String parentName = sanitizeDirectoryName(thirdPartyRepoName);
         if (parentName.isBlank()) {
@@ -216,6 +351,15 @@ public class Utils {
         return System.getProperty("os.name").toLowerCase().contains("win");
     }
 
+    /**
+     * Queries Gradle project properties and extracts the configured sourceCompatibility value.
+     *
+     * @param projectDir Gradle project directory
+     * @param jdkPath JAVA_HOME value for command execution
+     * @return resolved sourceCompatibility value or {@code null} when missing
+     * @throws IOException when process I/O fails
+     * @throws InterruptedException when process waiting is interrupted
+     */
     public static String retrieveSourceCompatibility(File projectDir, String jdkPath) throws IOException, InterruptedException {
         // Define the Gradle command
         String wrapper = isWindows() ? "gradlew.bat" : "./gradlew";
@@ -261,6 +405,12 @@ public class Utils {
         }
     }
 
+    /**
+     * Collapses dependency SCM/version pairs to the latest version per SCM URL.
+     *
+     * @param urlVersions dependency nodes containing SCM URL and version information
+     * @return map of SCM URL to highest detected version
+     */
     public static Map<String, String> collectLatestVersions(Set<DependencyNode> urlVersions) {
         return urlVersions.stream()
                 .collect(Collectors.toMap(
@@ -348,7 +498,7 @@ public class Utils {
     }
 
 
-    private static boolean isValidJdkHome(File jdkHome) {
+    private static boolean isInvalidJdkHome(File jdkHome) {
         var binCheck = new File(jdkHome, "bin").isDirectory();
         var libCheck = new File(jdkHome, "lib").isDirectory();
         log.info("The bin folder for path {} exists? {}", jdkHome.getPath(), binCheck);
@@ -356,6 +506,13 @@ public class Utils {
         return !binCheck || !libCheck;
     }
 
+    /**
+     * Formats repository names as a bullet list prefixed with a section header.
+     *
+     * @param header section title
+     * @param names repository names
+     * @return formatted multi-line text
+     */
     public static String concatenateRepoNames(String header, Set<String> names) {
         StringBuilder sb = new StringBuilder();
         sb.append(header).append("\n");

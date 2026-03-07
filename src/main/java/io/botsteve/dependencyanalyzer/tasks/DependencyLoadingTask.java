@@ -25,6 +25,14 @@ public class DependencyLoadingTask extends Task<Set<DependencyNode>> {
   private final Label progressLabel;
   private final TreeTableView<DependencyNode> treeTableView;
 
+  /**
+   * Creates a background loader for dependency analysis and SCM enrichment.
+   *
+   * @param projectDir selected project root directory
+   * @param progressBar progress indicator bound to task progress
+   * @param progressLabel status label bound to task messages
+   * @param treeTableView target tree table that receives resolved nodes
+   */
   public DependencyLoadingTask(String projectDir, ProgressBar progressBar, Label progressLabel,
                                TreeTableView<DependencyNode> treeTableView) {
     this.projectDir = projectDir;
@@ -33,6 +41,12 @@ public class DependencyLoadingTask extends Task<Set<DependencyNode>> {
     this.treeTableView = treeTableView;
   }
 
+  /**
+   * Loads dependencies, detects project type, and enriches SCM URLs.
+   *
+   * @return top-level dependency nodes for the selected project
+   * @throws Exception when dependency analysis or enrichment fails
+   */
   @Override
   protected Set<DependencyNode> call() throws Exception {
     updateMessage("Loading dependencies...");
@@ -53,6 +67,9 @@ public class DependencyLoadingTask extends Task<Set<DependencyNode>> {
     return dependencies;
   }
 
+  /**
+   * Pushes loaded dependencies into the tree table and hides progress UI.
+   */
   @Override
   protected void succeeded() {
     Set<DependencyNode> dependencies = getValue();
@@ -65,6 +82,9 @@ public class DependencyLoadingTask extends Task<Set<DependencyNode>> {
     progressLabel.setVisible(false);
   }
 
+  /**
+   * Converts task failure into a user-facing error message and closes progress UI.
+   */
   @Override
   protected void failed() {
     super.failed();
