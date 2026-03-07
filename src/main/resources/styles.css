@@ -136,6 +136,26 @@
     -fx-border-color: -fx-accent;
 }
 
+.tree-table-cell.third-party-select-cell {
+    -fx-background-color: transparent;
+}
+
+.tree-table-cell.fourth-party-select-cell {
+    -fx-background-color: rgba(52, 152, 219, 0.08);
+}
+
+.check-box.third-party-check-box .box {
+    -fx-border-color: #bdc3c7;
+}
+
+.check-box.fourth-party-check-box .box {
+    -fx-border-color: #5dade2;
+}
+
+.check-box.fourth-party-check-box:selected .mark {
+    -fx-background-color: #5dade2;
+}
+
 /* Toolbar */
 .tool-bar {
     -fx-background-color: #ffffff;
@@ -255,6 +275,18 @@
 .root.dark-mode .check-box .box {
     -fx-background-color: #404040;
     -fx-border-color: #555555;
+}
+
+.root.dark-mode .tree-table-cell.fourth-party-select-cell {
+    -fx-background-color: rgba(93, 173, 226, 0.18);
+}
+
+.root.dark-mode .check-box.fourth-party-check-box .box {
+    -fx-border-color: #85c1e9;
+}
+
+.root.dark-mode .check-box.fourth-party-check-box:selected .mark {
+    -fx-background-color: #85c1e9;
 }
 
 .root.dark-mode .menu-bar {

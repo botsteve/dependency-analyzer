@@ -1,4 +1,4 @@
-# Dependency Viewer
+# Dependency Analyzer
 
 A powerful JavaFX desktop application for analyzing **Maven** and **Gradle** project dependencies, resolving source code repositories, and rebuilding dependencies from source. Designed to help developers inspect dependency trees, fetch source code (Git), and compile projects using the correct JDK versions.
 
@@ -42,7 +42,7 @@ A powerful JavaFX desktop application for analyzing **Maven** and **Gradle** pro
 1. **Clone the Repository**:
    ```bash
    git clone <repository-url>
-   cd maven-dep-searcher
+   cd dependency-analyzer
    ```
 
 2. **Build the Application**:
@@ -53,7 +53,7 @@ A powerful JavaFX desktop application for analyzing **Maven** and **Gradle** pro
 3. **Locate the JAR**:
    The executable file is generated at:
    ```
-   target/maven-dep-searcher-1.0-SNAPSHOT.jar
+   target/dependency-analyzer.jar
    ```
 
 ---
@@ -61,27 +61,34 @@ A powerful JavaFX desktop application for analyzing **Maven** and **Gradle** pro
 ## 🏃 Running the Application
 
 ```bash
-java -jar target/maven-dep-searcher-1.0-SNAPSHOT.jar
+java -jar target/dependency-analyzer.jar
 ```
 
-### 🛠️ Building a Native Image (GraalVM)
+### 🛠️ Building a Native Image (GraalVM Native Image Maven Plugin)
 
-You can build a standalone native executable that doesn't require a JVM to run.
+This repo now activates `org.graalvm.buildtools:native-maven-plugin` inside the `native` profile. The profile binds the `compile-no-fork` goal to the `package` phase, mirroring the upstream sample that ships the same plugin configuration (see https://github.com/graalvm/native-build-tools/blob/master/samples/java-application/pom.xml#L70-L95). The plugin compiles our `io.botsteve.dependencyanalyzer.Launcher` entry point into a native binary that lives in `target/${project.artifactId}`.
 
 **Prerequisites:**
-1. **GraalVM JDK 21+** installed.
-2. `native-image` tool installed (`gu install native-image`).
+1. GraalVM 25 (JDK 21+) with `native-image` installed (`gu install native-image`).
+2. `GRAALVM_HOME` or `JAVA_HOME` set to that GraalVM installation so the Maven plugin can locate `native-image`.
 
 **Build command:**
 ```bash
-mvn clean gluonfx:build -Pnative
+GRAALVM_HOME=/path/to/graalvm mvn clean package -Pnative -DskipTests
 ```
 
-The native executable will be generated in `target/gluonfx/<platform>/` (e.g., `target/gluonfx/desktop/maven-dep-searcher`).
+Running the command above emits the native executable under `target/dependency-analyzer` (or `target/dependency-analyzer.exe` on Windows). The plugin already forwards the key native-image flags we used previously (for example, `--no-fallback`, `--install-exit-handlers`, `--enable-http`, `--enable-https`, `-H:+AddAllCharsets`, and `-H:+ReportExceptionStackTraces`) so HTTP/HTTPS access and exception diagnostics work the same as with the Gluon script.
 
-> **Windows**: You may also double-click the JAR file if `.jar` is associated with Java 21.
+**Testing guidance:**
+1. Run `mvn test` on the JVM first to catch regressions quickly.
+2. After that, rebuild the native image with the command above and exercise the produced binary directly (`./target/dependency-analyzer`).
+3. You can also bind the plugin&#8217;s `native:test` goal if you ever want to run the test suite as a native binary, but the JUnit/Jar-in-Jar setup in this repo currently keeps the JVM test run as the primary feedback loop.
+
+**Reflection & resource metadata:**
+The Maven plugin automatically discovers metadata under `src/main/resources/META-INF/native-image`. Keep `reflect-config.json` and `resource-config.json` updated so GraalVM knows which classes, methods, and assets need runtime registration. The reflection file already lists the launcher/viewer classes, the UI models, and the `TreeTableView` policy helper that JavaFX synthesizes (see https://github.com/botsteve/dependency-analyzer/blob/main/src/main/resources/META-INF/native-image/reflect-config.json#L1-L67). The resource file ensures every `.css`, `.png`, `.xml`, and `.properties` asset (e.g., `styles.css`, `logback.xml`, and the persisted `env-settings.properties`) survives the native build (see https://github.com/botsteve/dependency-analyzer/blob/main/src/main/resources/META-INF/native-image/resource-config.json#L1-L18).
 
 ---
+
 
 ## ⚙️ Configuration
 
@@ -113,6 +120,47 @@ When opening a Gradle project, the application automatically reads `gradle/wrapp
 
 If the detected JDK fails, the app automatically falls back to trying all other configured JDKs.
 
+### SCM Redirect Overrides (Runtime Editable)
+
+Some upstream SCM endpoints (for example `gitbox.apache.org`) may redirect to non-clone URLs and fail in JGit.  
+The app now supports an external, runtime-editable override file so you can fix those mappings without rebuilding.
+
+- Default file path: `<app-base-dir>/config/scm-repositories-overrides.properties`
+- Optional custom path: `-Ddependency.analyzer.scm.overrides.file=/absolute/path/to/file.properties`
+- External-only mode:
+  - this external file is the only SCM rewrite source used at runtime
+  - on first run, if missing, it is created from the JAR resource template `src/main/resources/config/scm-repositories-overrides.properties`
+  - there is no built-in hardcoded fallback mapping list in code
+  - malformed content still fails fast during SCM resolution/reload
+
+Supported key formats in that file:
+
+- `artifact.<artifactId>=<repoUrl>`
+- `group.<groupId>=<repoUrl>`
+- `<artifactId>=<repoUrl>` (legacy shorthand; interpreted as artifact mapping)
+
+Example:
+
+```properties
+artifact.commons-collections=https://github.com/apache/commons-collections
+artifact.commons-text=https://github.com/apache/commons-text
+group.org.yaml=https://github.com/snakeyaml/snakeyaml
+```
+
+The file is reloaded automatically when its timestamp changes, so updates apply during runtime workflows (no rebuild needed).
+For safe runtime updates, write to a temp file and atomically move it into place.
+
+### SCM Failure Taxonomy (Operational)
+
+Downloader/build status output uses classified failure codes to simplify troubleshooting:
+
+- `REDIRECT_BLOCKED` — remote SCM endpoint redirects to a non-cloneable target or violates redirect policy.
+- `AUTH_FAILURE` — credentials/permissions rejected by remote.
+- `DNS_FAILURE` — repository host could not be resolved.
+- `TIMEOUT` — network operation exceeded timeout budget.
+
+When these appear, verify SCM overrides first (`dependency.analyzer.scm.overrides.file`), then network/proxy settings.
+
 ---
 
 ## 🌐 Proxy Configuration
@@ -127,7 +175,7 @@ Set the `http_proxy` environment variable **before launching the application**:
 
 ```bash
 export http_proxy=http://your-proxy-host:8080
-java -jar target/maven-dep-searcher-1.0-SNAPSHOT.jar
+java -jar target/dependency-analyzer.jar
 ```
 
 Or add it permanently to your shell profile (`~/.zshrc`, `~/.bashrc`):
@@ -141,19 +189,19 @@ export https_proxy=http://your-proxy-host:8080
 
 ```cmd
 set http_proxy=http://your-proxy-host:8080
-java -jar target/maven-dep-searcher-1.0-SNAPSHOT.jar
+java -jar target/dependency-analyzer.jar
 ```
 
 #### Windows (PowerShell)
 
 ```powershell
 $env:http_proxy = "http://your-proxy-host:8080"
-java -jar target\maven-dep-searcher-1.0-SNAPSHOT.jar
+java -jar target\dependency-analyzer.jar
 ```
 
 ### How it Works
 
-When the application downloads source code (via the **Download Selected** button), it checks for the `http_proxy` environment variable. If present, it:
+When the application downloads source code (via the **Download 3rd Party** or **Download 4th Party** button), it checks for the `http_proxy` environment variable. If present, it:
 
 1. Parses the host and port from the URL (e.g., `http://proxy.example.com:8080`).
 2. Configures a global Java `ProxySelector` that routes **all** HTTP/HTTPS connections through the proxy.
@@ -225,7 +273,15 @@ The tool parses the project and displays the dependency tree with columns:
 - **Scope filter**: Use the "Scope" dropdown to show only dependencies of a specific scope (e.g., only `compile` or only `test`).
 - **Select All**: Check the "Select All" checkbox to select/deselect all visible dependencies.
 
-Click **Download Selected**. The tool clones the SCM repositories for the selected dependencies into the `downloaded_repos/<project_name>/` folder (relative to the JAR location). This keeps source code organized even when working with multiple different projects.
+Click **Download 3rd Party**. The tool clones selected direct 3rd-party SCM repositories into:
+
+`downloaded_repos/<project_name>/3rd-party/<repo_name>/`
+
+Click **Download 4th Party** to clone 4th-party repos into a parent-grouped structure:
+
+`downloaded_repos/<project_name>/4th-party/<third_party_repo_name>/<fourth_party_repo_name>/`
+
+This keeps both 3rd-party and 4th-party repositories organized per project and per owning dependency.
 
 ### 4. Build
 
@@ -247,16 +303,16 @@ Right-click on any dependency to access additional options via the context menu.
 ## 🏗️ Architecture
 
 ```
-com.botsteve.mavendepsearcher/
+io.botsteve.dependencyanalyzer/
 ├── views/                  # JavaFX application views
 │   ├── MainAppView.java        # Main application window
-│   └── SettingsView.java       # Environment settings dialog
+│   └── LoginViewer.java         # JavaFX entry integration view
 ├── components/             # UI components
 │   ├── TableViewComponent.java  # Tree-table + filter/scope controls
 │   ├── ColumnsComponent.java    # Column definitions (scope, SCM, etc)
 │   ├── ButtonsComponent.java    # Toolbar buttons
 │   ├── CheckBoxComponent.java   # Select all checkbox
-│   ├── ContextMenuComponent.java # Right-click menu
+│   ├── ContextMenuComponent.java # Legacy context menu helper
 │   ├── MenuComponent.java       # Menu bar
 │   └── ProgressBoxComponent.java # Progress bar
 ├── service/                # Business logic
@@ -264,13 +320,14 @@ com.botsteve.mavendepsearcher/
 │   ├── DependencyTreeAnalyzerService.java  # Maven CLI tree parser
 │   ├── GradleDependencyAnalyzerService.java # Gradle dependency analysis + JDK detection
 │   ├── MavenInvokerService.java            # Maven Invoker API wrapper
-│   ├── ScmUrlFetcherService.java           # Maven SCM URL resolver
-│   └── GradleScmUrlFetcherService.java     # Gradle SCM URL resolver (Maven Central)
+│   ├── ScmUrlFetcherService.java           # CycloneDX SCM URL resolver
+│   ├── ScmEnrichmentService.java           # POM-based SCM enrichment + retry
+│   └── LicenseAggregationService.java      # 3rd/4th-party license report generation
 ├── tasks/                  # Background tasks (JavaFX Task)
 │   ├── DependencyLoadingTask.java    # Load dependency tree
 │   ├── DependencyDownloaderTask.java # Download source repos
 │   ├── BuildRepositoriesTask.java    # Build downloaded repos
-│   └── ScmFetcherTask.java          # Fetch SCM URLs
+│   └── CheckoutTagsTask.java        # Resolve checkout tag by dependency version
 ├── model/                  # Data models
 │   ├── DependencyNode.java          # Dependency with scope
 │   ├── EnvSetting.java              # Settings key-value pair
@@ -280,9 +337,11 @@ com.botsteve.mavendepsearcher/
 │   ├── FxUtils.java                 # JavaFX helpers
 │   ├── ProxyUtil.java               # HTTP proxy configuration
 │   ├── JavaVersionResolver.java     # JDK version resolution
-│   └── ScmRepositories.java        # SCM URL normalization
+│   ├── ScmRepositories.java         # External SCM override resolution
+│   ├── ScmUrlUtils.java             # SCM canonicalization + repo naming
+│   └── OperationStatus.java         # Structured status formatting
 ├── exception/              # Custom exceptions
-│   └── DepViewerException.java
+│   └── DependencyAnalyzerException.java
 └── logging/                # Logging configuration
     └── TextAreaAppender.java
 ```
@@ -313,6 +372,42 @@ All build tool commands run with verbose flags for detailed diagnostics:
 | Ant        | `-verbose`   | Target/task execution, property resolution           |
 
 All output is logged to the console at `INFO` level and visible in the application log.
+
+---
+
+## ✅ Verification Commands
+
+Use these commands to validate the current implementation and packaging gates:
+
+```bash
+mvn test
+mvn clean package
+mvn -B verify --file pom.xml
+```
+
+Single-test execution shortcuts:
+
+```bash
+mvn -Dtest=UtilsTest test
+mvn -Dtest=UtilsTest#testCollectLatestVersions test
+```
+
+Targeted regression checks for filtering/output popup:
+
+```bash
+mvn -Dtest=TableViewComponentFilterTest,ColumnsComponentOutputPopupTest,DependencyAnalyzerTest test
+```
+
+## 🤖 Agent Development Guide
+
+If you are using coding agents in this repository, use `AGENTS.md` as the operational contract.
+It includes authoritative build/test/run commands, single-test patterns, code style guidance, and repo-specific validation expectations.
+
+Policy file status (checked by path):
+
+- `.cursorrules` — not present
+- `.cursor/rules/` — not present
+- `.github/copilot-instructions.md` — not present
 
 ---
 

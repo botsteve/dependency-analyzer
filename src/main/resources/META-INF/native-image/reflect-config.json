@@ -1,20 +1,20 @@
 [
   {
-    "name": "com.botsteve.mavendepsearcher.MavenDependencyViewer",
+    "name": "io.botsteve.dependencyanalyzer.DependencyAnalyzer",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
     "allPublicMethods": true
   },
   {
-    "name": "com.botsteve.mavendepsearcher.Launcher",
+    "name": "io.botsteve.dependencyanalyzer.Launcher",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
     "allPublicMethods": true
   },
   {
-    "name": "com.botsteve.mavendepsearcher.views.LoginViewer",
+    "name": "io.botsteve.dependencyanalyzer.views.LoginViewer",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
@@ -22,14 +22,14 @@
     "allDeclaredFields": true
   },
   {
-    "name": "com.botsteve.mavendepsearcher.views.MainAppView",
+    "name": "io.botsteve.dependencyanalyzer.views.MainAppView",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
     "allPublicMethods": true
   },
   {
-    "name": "com.botsteve.mavendepsearcher.model.DependencyNode",
+    "name": "io.botsteve.dependencyanalyzer.model.DependencyNode",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
@@ -38,7 +38,7 @@
     "allPublicFields": true
   },
   {
-    "name": "com.botsteve.mavendepsearcher.model.EnvSetting",
+    "name": "io.botsteve.dependencyanalyzer.model.EnvSetting",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
@@ -47,7 +47,7 @@
     "allPublicFields": true
   },
   {
-    "name": "com.botsteve.mavendepsearcher.model.CollectingOutputHandler",
+    "name": "io.botsteve.dependencyanalyzer.model.CollectingOutputHandler",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
