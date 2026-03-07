@@ -38,7 +38,8 @@ For deep implementation details, see the docs series:
 - [04 - JDK Bootstrap and Build Pipeline](docs/04-jdk-bootstrap-and-build-pipeline.md)
 - [05 - CI Workflows and Release Artifacts](docs/05-ci-workflows-and-release-artifacts.md)
 - [06 - JdkDownloadTask Deep Dive](docs/06-jdk-download-task-deep-dive.md)
-- [07 - Release Process for 2.0.0](docs/07-release-process-2.0.0.md)
+- [07 - Release Process (Reusable)](docs/07-release-process-2.0.0.md)
+- [08 - Release Notes for v2.0.0](docs/08-release-notes-2.0.0.md)
 
 ---
 
