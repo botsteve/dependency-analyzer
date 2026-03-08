@@ -1,7 +1,6 @@
 package io.botsteve.dependencyanalyzer.service;
 
 import static io.botsteve.dependencyanalyzer.service.MavenInvokerService.getMavenInvokerResult;
-import static io.botsteve.dependencyanalyzer.utils.ScmRepositories.fixNonResolvableScmRepositorise;
 
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
 import io.botsteve.dependencyanalyzer.utils.ScmUrlUtils;
@@ -64,7 +63,7 @@ public class ScmUrlFetcherService {
         String normalizedVcsUrl = SCM_URL_NOT_FOUND.equals(vcsUrl)
             ? SCM_URL_NOT_FOUND
             : ScmUrlUtils.canonicalize(vcsUrl);
-        vcsUrlMap.put(key, fixNonResolvableScmRepositorise(normalizedVcsUrl, groupId, artifactId));
+        vcsUrlMap.put(key, normalizedVcsUrl);
       }
     }
 

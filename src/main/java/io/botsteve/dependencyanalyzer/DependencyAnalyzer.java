@@ -12,14 +12,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.logging.Level;
 
 import static io.botsteve.dependencyanalyzer.utils.ScmRepositories.initializeOverridesFile;
 import static io.botsteve.dependencyanalyzer.utils.Utils.createSettingsFile;
 public class DependencyAnalyzer extends Application {
 
     private static final Logger log = LoggerFactory.getLogger(DependencyAnalyzer.class);
-    private static final java.util.logging.Logger JUL_LOG = java.util.logging.Logger.getLogger(DependencyAnalyzer.class.getName());
     private static final Path STARTUP_TRACE_FILE = Path.of("/tmp", "dependency-analyzer-startup-trace.log");
 
     public DependencyAnalyzer() {
@@ -45,7 +43,6 @@ public class DependencyAnalyzer extends Application {
         createSettingsFile();
         initializeOverridesFile();
         log.info("Starting main JavaFX view");
-        JUL_LOG.log(Level.INFO, "Starting main JavaFX view");
         new MainAppView().start(primaryStage);
         startupProbe("MainAppView.start returned to DependencyAnalyzer.start");
         Platform.setImplicitExit(true);
@@ -78,11 +75,24 @@ public class DependencyAnalyzer extends Application {
 
     private static void startupProbe(String message) {
       String line = "[startup] " + message + System.lineSeparator();
-        System.err.print(line);
         try {
+            log.info("[startup] {}", message);
+        } catch (Throwable loggingFailure) {
+            System.err.print(line);
+        }
+        try {
+            Path parent = STARTUP_TRACE_FILE.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             Files.writeString(STARTUP_TRACE_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+            try {
+                log.warn("[startup] Failed writing startup trace file: {}", e.getMessage());
+            } catch (Throwable ignored) {
+                System.err.print(line);
+                System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+            }
         }
     }
 

@@ -32,6 +32,15 @@ public class MavenInvokerService {
                                                               String goals,
                                                               String mavenOpts,
                                                               String jdkPath) {
+    return getMavenInvokerResult(projectDir, moduleDir, goals, mavenOpts, jdkPath, true);
+  }
+
+  public static CollectingOutputHandler getMavenInvokerResult(String projectDir,
+                                                              String moduleDir,
+                                                              String goals,
+                                                              String mavenOpts,
+                                                              String jdkPath,
+                                                              boolean debugEnabled) {
     File toolchainsFile = null;
     toolchainsFile = new File(Utils.getRepositoriesPath(), "toolchains.xml");
     if (toolchainsFile.exists()) {
@@ -74,7 +83,7 @@ public class MavenInvokerService {
     request.setPomFile(pomFile);
     request.addArgs(Arrays.asList(goals.trim().split(" ")));
     request.setBatchMode(true);
-    request.setDebug(true); // Enable verbose/debug output (-X)
+    request.setDebug(debugEnabled);
     request.setMavenOpts(mavenOpts.trim());
     request.addShellEnvironment("JAVA_HOME", jdkPath);
     log.info("Invoking Maven: goals=[{}] opts=[{}] JAVA_HOME=[{}] pom=[{}]", goals, mavenOpts,

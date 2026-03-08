@@ -2,7 +2,6 @@ package io.botsteve.dependencyanalyzer.service;
 
 import static io.botsteve.dependencyanalyzer.utils.JavaVersionResolver.JDKS;
 import static io.botsteve.dependencyanalyzer.utils.JavaVersionResolver.resolveJavaPathToBeUsed;
-import static io.botsteve.dependencyanalyzer.utils.ScmRepositories.fixNonResolvableScmRepositorise;
 import static io.botsteve.dependencyanalyzer.utils.Utils.getPropertyFromSetting;
 
 import java.io.BufferedReader;
@@ -337,8 +336,8 @@ public class GradleDependencyAnalyzerService {
         DependencyNode node = new DependencyNode(groupId, artifactId,
             version != null ? version : "", scope);
 
-        String scmUrl = extractScmUrl(component, groupId, artifactId);
-        node.setScmUrl(scmUrl);
+    String scmUrl = extractScmUrl(component);
+    node.setScmUrl(scmUrl);
 
         dependencies.add(node);
       }
@@ -379,15 +378,14 @@ public class GradleDependencyAnalyzerService {
     return "implementation";
   }
 
-  private static String extractScmUrl(JsonNode component, String groupId, String artifactId) {
+  private static String extractScmUrl(JsonNode component) {
     JsonNode externalReferences = component.path("externalReferences");
     if (externalReferences.isArray()) {
       for (JsonNode ref : externalReferences) {
         if ("vcs".equals(ref.path("type").asString())) {
           String url = ref.path("url").asString("");
           if (!url.isEmpty()) {
-            return fixNonResolvableScmRepositorise(
-                ScmUrlUtils.canonicalize(url), groupId, artifactId);
+            return ScmUrlUtils.canonicalize(url);
           }
         }
       }

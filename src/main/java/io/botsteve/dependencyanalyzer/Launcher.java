@@ -1,6 +1,8 @@
 package io.botsteve.dependencyanalyzer;
 
 import io.botsteve.dependencyanalyzer.utils.LogUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,6 +16,7 @@ import java.nio.file.StandardOpenOption;
  * to {@link DependencyAnalyzer}. It is used as the shaded JAR manifest main class.</p>
  */
 public class Launcher {
+    private static final Logger log = LoggerFactory.getLogger(Launcher.class);
     private static final Path STARTUP_TRACE_FILE = Path.of("/tmp", "dependency-analyzer-startup-trace.log");
 
     /**
@@ -26,15 +29,14 @@ public class Launcher {
         System.setProperty("prism.order", "sw");
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
             startupProbe("Uncaught exception on thread " + thread.getName() + ": " + throwable.getClass().getName() + " - " + throwable.getMessage());
-            throwable.printStackTrace(System.err);
+            log.error("Uncaught exception on thread {}", thread.getName(), throwable);
         });
         startupProbe("Launcher.main entered");
         try {
             DependencyAnalyzer.main(args);
         } catch (Throwable t) {
-            System.err.println("[startup] Uncaught launcher failure: " + t.getMessage());
             startupProbe("Launcher.main uncaught failure: " + t.getClass().getName() + ": " + t.getMessage());
-            t.printStackTrace(System.err);
+            log.error("Uncaught launcher failure", t);
             throw t;
         }
     }
@@ -46,11 +48,24 @@ public class Launcher {
      */
     private static void startupProbe(String message) {
       String line = "[startup] " + message + System.lineSeparator();
-        System.err.print(line);
         try {
+            log.info("[startup] {}", message);
+        } catch (Throwable loggingFailure) {
+            System.err.print(line);
+        }
+        try {
+            Path parent = STARTUP_TRACE_FILE.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             Files.writeString(STARTUP_TRACE_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+            try {
+                log.warn("[startup] Failed writing startup trace file: {}", e.getMessage());
+            } catch (Throwable ignored) {
+                System.err.print(line);
+                System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+            }
         }
     }
 }

@@ -22,7 +22,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.net.URL;
-import java.util.logging.Level;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import io.botsteve.dependencyanalyzer.components.ButtonsComponent;
@@ -37,7 +36,6 @@ import io.botsteve.dependencyanalyzer.model.DependencyNode;
 public class MainAppView {
 
   private static final Logger log = LoggerFactory.getLogger(MainAppView.class);
-  private static final java.util.logging.Logger JUL_LOG = java.util.logging.Logger.getLogger(MainAppView.class.getName());
   private static final Path STARTUP_TRACE_FILE = Path.of("/tmp", "dependency-analyzer-startup-trace.log");
 
   private final TableViewComponent tableViewComponent = new TableViewComponent();
@@ -97,7 +95,6 @@ public class MainAppView {
     primaryStage.setOnShown(event -> {
       Platform.setImplicitExit(true);
       log.info("Main JavaFX stage shown");
-      JUL_LOG.log(Level.INFO, "Main JavaFX stage shown");
       startupProbe("Main JavaFX stage onShown fired");
     });
     URL stylesheetUrl = getClass().getResource("/styles.css");
@@ -106,7 +103,6 @@ public class MainAppView {
     }
     primaryStage.setScene(scene);
     log.info("Calling primaryStage.show()");
-    JUL_LOG.log(Level.INFO, "Calling primaryStage.show()");
     startupProbe("Calling primaryStage.show()");
     primaryStage.show();
     primaryStage.toFront();
@@ -115,11 +111,24 @@ public class MainAppView {
 
   private static void startupProbe(String message) {
     String line = "[startup] " + message + System.lineSeparator();
-    System.err.print(line);
     try {
+      log.info("[startup] {}", message);
+    } catch (Throwable loggingFailure) {
+      System.err.print(line);
+    }
+    try {
+      Path parent = STARTUP_TRACE_FILE.getParent();
+      if (parent != null) {
+        Files.createDirectories(parent);
+      }
       Files.writeString(STARTUP_TRACE_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     } catch (IOException e) {
-      System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+      try {
+        log.warn("[startup] Failed writing startup trace file: {}", e.getMessage());
+      } catch (Throwable ignored) {
+        System.err.print(line);
+        System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+      }
     }
   }
 }

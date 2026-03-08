@@ -67,11 +67,15 @@ public class ScmRepositories {
 
     String artifactMatch = findExactOrPrefix(artifactOverrides, normalizedArtifactId);
     if (artifactMatch != null) {
+      log.info("SCM override match (artifact): groupId='{}', artifactId='{}' => {}",
+          safe(groupId), safe(artifactId), artifactMatch);
       return ScmUrlUtils.canonicalize(artifactMatch);
     }
 
     String groupMatch = findExactOrPrefix(groupOverrides, normalizedGroupId);
     if (groupMatch != null) {
+      log.info("SCM override match (group): groupId='{}', artifactId='{}' => {}",
+          safe(groupId), safe(artifactId), groupMatch);
       return ScmUrlUtils.canonicalize(groupMatch);
     }
 
@@ -257,6 +261,10 @@ public class ScmRepositories {
       return "";
     }
     return key.trim().toLowerCase(Locale.ROOT);
+  }
+
+  private static String safe(String value) {
+    return value == null ? "" : value;
   }
 
   static void resetForTests() {

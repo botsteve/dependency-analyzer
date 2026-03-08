@@ -10,9 +10,9 @@
     <url>http://maven.apache.org</url>
 
     <scm>
-        <connection>scm:git:git://github.com/botsteve/dependency-analyzer.git</connection>
-        <developerConnection>scm:git:ssh://github.com:botsteve/dependency-analyzer.git</developerConnection>
-        <url>http://github.com/botsteve/dependency-analyzer/tree/master</url>
+        <connection>scm:git:https://github.com/botsteve/dependency-analyzer.git</connection>
+        <developerConnection>scm:git:git@github.com:botsteve/dependency-analyzer.git</developerConnection>
+        <url>https://github.com/botsteve/dependency-analyzer</url>
       <tag>HEAD</tag>
   </scm>
 

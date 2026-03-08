@@ -39,4 +39,10 @@ class RepoNameResolutionTest {
     String url = "https://gitlab.com/group/subgroup/my-repo/-/tree/main";
     assertEquals("my-repo", ScmUrlUtils.resolveRepoName(url, "fallback"));
   }
+
+  @Test
+  void shouldResolveRepoNameFromMalformedGitSuffixPath() {
+    String url = "https://github.com/javaee/jaxb-spec.git/jaxb-api";
+    assertEquals("jaxb-spec", ScmUrlUtils.resolveRepoName(url, "fallback"));
+  }
 }

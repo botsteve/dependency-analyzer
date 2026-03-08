@@ -61,7 +61,7 @@ public final class ScmUrlUtils {
       String scheme = normalizeScheme(uri.getScheme());
       String host = uri.getHost().toLowerCase(Locale.ROOT);
       int port = uri.getPort();
-      String path = uri.getPath() == null ? "" : uri.getPath();
+      String path = trimPathAfterGitSuffix(uri.getPath() == null ? "" : uri.getPath());
       String query = uri.getQuery();
 
       String rebuilt = scheme + "://" + host + (port > 0 ? ":" + port : "") + path + (query == null ? "" : "?" + query);
@@ -215,7 +215,7 @@ public final class ScmUrlUtils {
   }
 
   private static String trimGitAndTrailingSlash(String value) {
-    String out = value == null ? "" : value.trim();
+    String out = trimPathAfterGitSuffix(value == null ? "" : value.trim());
     while (out.endsWith("/")) {
       out = out.substring(0, out.length() - 1);
     }
@@ -223,6 +223,25 @@ public final class ScmUrlUtils {
       out = out.substring(0, out.length() - 4);
     }
     return out;
+  }
+
+  private static String trimPathAfterGitSuffix(String value) {
+    if (value == null || value.isBlank()) {
+      return value == null ? "" : value;
+    }
+
+    String lower = value.toLowerCase(Locale.ROOT);
+    int slashIndex = lower.indexOf(".git/");
+    if (slashIndex >= 0) {
+      return value.substring(0, slashIndex + 4);
+    }
+
+    int backslashIndex = lower.indexOf(".git\\");
+    if (backslashIndex >= 0) {
+      return value.substring(0, backslashIndex + 4);
+    }
+
+    return value;
   }
 
   private static String toHttpsFromScpStyle(String scpLike) {

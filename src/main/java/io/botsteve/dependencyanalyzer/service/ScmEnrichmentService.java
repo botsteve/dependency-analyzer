@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +42,7 @@ public class ScmEnrichmentService {
   private static final String MAVEN_CENTRAL_BASE = "https://repo1.maven.org/maven2";
   private static final int DEFAULT_MAX_WORKERS = 6;
   private static final int MAX_RETRIES = 2;
+  private static final String SCM_URL_NOT_FOUND = "SCM URL not found";
 
   private static final ConcurrentHashMap<String, ScmResolution> RESOLVED_CACHE = new ConcurrentHashMap<>();
 
@@ -57,38 +59,70 @@ public class ScmEnrichmentService {
         .filter(ScmEnrichmentService::shouldFetch)
         .collect(Collectors.toSet());
 
-    if (nodesToFetch.isEmpty()) {
+    if (!nodesToFetch.isEmpty()) {
+      List<DependencyNode> workItems = new ArrayList<>(nodesToFetch);
+      int workers = Math.max(1, Math.min(DEFAULT_MAX_WORKERS, workItems.size()));
+      log.info("Enriching {} unique dependencies using {} workers...", workItems.size(), workers);
+
+      ExecutorService executor = Executors.newFixedThreadPool(workers);
+      try {
+        List<Future<Void>> futures = new ArrayList<>();
+        for (DependencyNode node : workItems) {
+          futures.add(executor.submit((Callable<Void>) () -> {
+            enrichNode(node);
+            return null;
+          }));
+        }
+
+        for (Future<Void> future : futures) {
+          try {
+            future.get();
+          } catch (Exception e) {
+            log.debug("SCM enrichment worker failed: {}", e.getMessage());
+          }
+        }
+      } finally {
+        executor.shutdown();
+        try {
+          executor.awaitTermination(2, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
+
+    applyOverridesInPlace(allNodes);
+  }
+
+  static void applyOverridesInPlace(Set<DependencyNode> nodes) {
+    if (nodes == null || nodes.isEmpty()) {
       return;
     }
 
-    List<DependencyNode> workItems = new ArrayList<>(nodesToFetch);
-    int workers = Math.max(1, Math.min(DEFAULT_MAX_WORKERS, workItems.size()));
-    log.info("Enriching {} unique dependencies using {} workers...", workItems.size(), workers);
-
-    ExecutorService executor = Executors.newFixedThreadPool(workers);
-    try {
-      List<Future<Void>> futures = new ArrayList<>();
-      for (DependencyNode node : workItems) {
-        futures.add(executor.submit((Callable<Void>) () -> {
-          enrichNode(node);
-          return null;
-        }));
+    int overriddenCount = 0;
+    for (DependencyNode node : nodes) {
+      if (node == null) {
+        continue;
       }
 
-      for (Future<Void> future : futures) {
-        try {
-          future.get();
-        } catch (Exception e) {
-          log.debug("SCM enrichment worker failed: {}", e.getMessage());
-        }
+      String current = node.getScmUrl();
+      String normalizedScmUrl = (current == null || current.isBlank())
+          ? SCM_URL_NOT_FOUND
+          : ScmUrlUtils.canonicalize(current);
+      String overridden = fixNonResolvableScmRepositorise(normalizedScmUrl, node.getGroupId(), node.getArtifactId());
+      node.setScmUrl(overridden);
+      if (!Objects.equals(normalizedScmUrl, overridden)) {
+        overriddenCount++;
+        log.info("Applied final SCM override for {}:{}:{} -> {} (from {})",
+            node.getGroupId(), node.getArtifactId(), node.getVersion(), overridden, normalizedScmUrl);
       }
-    } finally {
-      executor.shutdown();
-      try {
-        executor.awaitTermination(2, TimeUnit.MINUTES);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
+    }
+
+    if (overriddenCount == 0) {
+      log.info("Final SCM override pass completed: no overrides applied across {} dependencies", nodes.size());
+    } else {
+      log.info("Final SCM override pass completed: applied {} override(s) across {} dependencies",
+          overriddenCount, nodes.size());
     }
   }
 
@@ -99,11 +133,11 @@ public class ScmEnrichmentService {
 
     if (resolution.outcome() == PomFetchOutcome.SUCCESS && !resolution.scmUrl().isBlank()) {
       String normalizedScmUrl = ScmUrlUtils.canonicalize(resolution.scmUrl());
-      node.setScmUrl(fixNonResolvableScmRepositorise(normalizedScmUrl, node.getGroupId(), node.getArtifactId()));
+      node.setScmUrl(normalizedScmUrl);
       return;
     }
 
-    node.setScmUrl("SCM URL not found");
+    node.setScmUrl(SCM_URL_NOT_FOUND);
   }
 
   private static void collectAllNodes(Set<DependencyNode> nodes, Set<DependencyNode> accumulator) {
@@ -117,7 +151,7 @@ public class ScmEnrichmentService {
 
   private static boolean shouldFetch(DependencyNode node) {
     String current = node.getScmUrl();
-    return current == null || current.isEmpty() || "SCM URL not found".equals(current);
+    return current == null || current.isEmpty() || SCM_URL_NOT_FOUND.equals(current);
   }
 
   /**

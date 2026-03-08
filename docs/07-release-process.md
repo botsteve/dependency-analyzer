@@ -29,6 +29,37 @@ For a release, define:
 - `RELEASE_VERSION` (for example `2.0.0`)
 - `NEXT_DEVELOPMENT_VERSION` (for example `2.0.1-SNAPSHOT` or `2.1.0-SNAPSHOT`)
 
+### How version bumping works (patch / minor / major)
+
+This project follows semantic versioning style (`MAJOR.MINOR.PATCH`):
+
+- **PATCH** bump (`x.y.z` -> `x.y.(z+1)`):
+  - bug fixes, no breaking behavior changes,
+  - example: `2.0.1` -> `2.0.2`.
+- **MINOR** bump (`x.y.z` -> `x.(y+1).0`):
+  - backward-compatible features or notable enhancements,
+  - example: `2.0.2` -> `2.1.0`.
+- **MAJOR** bump (`x.y.z` -> `(x+1).0.0`):
+  - breaking changes (API/behavior/config expectations that require user changes),
+  - example: `2.1.5` -> `3.0.0`.
+
+When using `maven-release-plugin`, you choose both values explicitly:
+
+- `-DreleaseVersion=<MAJOR.MINOR.PATCH>`
+- `-DdevelopmentVersion=<next-version>-SNAPSHOT`
+
+Examples:
+
+- Patch release:
+  - `releaseVersion=2.0.2`
+  - `developmentVersion=2.0.3-SNAPSHOT`
+- Minor release:
+  - `releaseVersion=2.1.0`
+  - `developmentVersion=2.2.0-SNAPSHOT` (or `2.1.1-SNAPSHOT` if you keep a maintenance line)
+- Major release:
+  - `releaseVersion=3.0.0`
+  - `developmentVersion=3.1.0-SNAPSHOT` (or `3.0.1-SNAPSHOT` for immediate patch line)
+
 ---
 
 ## 3) Maven release plugin path (recommended)
@@ -40,10 +71,41 @@ For a release, define:
 ```bash
 mvn -B release:clean
 mvn -B release:prepare \
+  -DpushChanges=false
   -DreleaseVersion=${RELEASE_VERSION} \
   -DdevelopmentVersion=${NEXT_DEVELOPMENT_VERSION}
 mvn -B release:perform
 ```
+
+### Verbose / troubleshooting mode
+
+If `release:prepare` appears to hang, run with debug output first:
+
+```bash
+mvn -X -B release:clean release:prepare \
+  -DdryRun=true \
+  -DpushChanges=false \
+  -DreleaseVersion=${RELEASE_VERSION} \
+  -DdevelopmentVersion=${NEXT_DEVELOPMENT_VERSION}
+```
+
+Then run the real prepare command (without dry-run) once output is clean.
+
+Common hang causes:
+
+1. Invalid SCM `developerConnection` in `pom.xml`.
+2. SSH authentication prompt waiting in background (missing key / agent not loaded).
+3. Missing GitHub auth for the push target.
+
+Quick checks:
+
+```bash
+git remote -v
+ssh -T git@github.com
+git push --dry-run origin main
+```
+
+`maven-release-plugin` uses SCM info from `pom.xml`, so `git remote -v` and `<scm>` should point to the same repository.
 
 ### Example (2.0.0)
 

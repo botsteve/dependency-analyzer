@@ -38,7 +38,8 @@ public class NativeEntryPoint extends Application {
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
             startupProbe("Uncaught exception on thread " + thread.getName() + ": "
                 + throwable.getClass().getName() + " - " + throwable.getMessage());
-            throwable.printStackTrace(System.err);
+            LoggerFactory.getLogger(NativeEntryPoint.class)
+                .error("Uncaught exception on thread {}", thread.getName(), throwable);
         });
         startupProbe("NativeEntryPoint.main entered");
         startupProbe("Log file: " + getDefaultLogFilePath());
@@ -71,11 +72,25 @@ public class NativeEntryPoint extends Application {
 
     private static void startupProbe(String message) {
       String line = "[startup] " + message + System.lineSeparator();
-        System.err.print(line);
         try {
+            LoggerFactory.getLogger(NativeEntryPoint.class).info("[startup] {}", message);
+        } catch (Throwable loggingFailure) {
+            System.err.print(line);
+        }
+        try {
+            Path parent = STARTUP_TRACE_FILE.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             Files.writeString(STARTUP_TRACE_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+            try {
+                LoggerFactory.getLogger(NativeEntryPoint.class)
+                    .warn("[startup] Failed writing startup trace file: {}", e.getMessage());
+            } catch (Throwable ignored) {
+                System.err.print(line);
+                System.err.println("[startup] Failed writing startup trace file: " + e.getMessage());
+            }
         }
     }
 

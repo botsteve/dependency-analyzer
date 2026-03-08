@@ -3,6 +3,7 @@ package io.botsteve.dependencyanalyzer.components;
 import static io.botsteve.dependencyanalyzer.utils.FxUtils.getErrorAlertAndCloseProgressBar;
 import static io.botsteve.dependencyanalyzer.utils.FxUtils.showAlert;
 import static io.botsteve.dependencyanalyzer.utils.FxUtils.showError;
+import static io.botsteve.dependencyanalyzer.utils.FxUtils.showTextDialog;
 import static io.botsteve.dependencyanalyzer.utils.Utils.arePropertiesConfiguredAndValid;
 import static io.botsteve.dependencyanalyzer.utils.Utils.collectLatestVersions;
 import static io.botsteve.dependencyanalyzer.utils.Utils.getFourthPartyRepositoriesPath;
@@ -10,7 +11,6 @@ import static io.botsteve.dependencyanalyzer.utils.Utils.getMissingOrInvalidJdkS
 import static io.botsteve.dependencyanalyzer.utils.Utils.getThirdPartyRepositoriesPath;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -41,7 +41,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.stage.DirectoryChooser;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
 import io.botsteve.dependencyanalyzer.model.ProjectType;
@@ -218,41 +217,97 @@ public class ButtonsComponent {
   public Button createBuildAggregatedLicenseButton(ProgressBar progressBar, Label progressLabel) {
     Button buildButton = new Button("Create Aggregated License");
     buildButton.setOnAction(event -> {
-      if (tableViewComponent.getSelectedDependencies().isEmpty()) {
-        Platform.runLater(() -> showError("No dependencies selected!"));
+      Set<DependencyNode> selectedThirdParty = getSelectedThirdPartyDependencies();
+      if (selectedThirdParty.isEmpty()) {
+        Platform.runLater(() -> showError("No 3rd-party dependencies selected!"));
         return;
       }
 
-      FileChooser fileChooser = new FileChooser();
-      fileChooser.setTitle("Save Aggregated License Report");
-      fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Markdown Files", "*.md"));
-      fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Text Files", "*.txt"));
-      fileChooser.setInitialFileName("PUBLIC-LICENSES-NOTICE.md");
-      File out = fileChooser.showSaveDialog(buildButton.getScene() == null ? null : buildButton.getScene().getWindow());
-      if (out == null) return;
+      Set<String> missingDownloadedRepos = findMissingDownloadedThirdPartyRepos(selectedThirdParty);
+      if (!missingDownloadedRepos.isEmpty()) {
+        Platform.runLater(() -> showError(
+            "Missing downloaded 3rd-party repositories for:\n"
+                + String.join("\n", missingDownloadedRepos)
+                + "\n\nRun Download 3rd Party first."));
+        return;
+      }
 
-      Set<DependencyNode> selectedSnapshot =
-          new LinkedHashSet<>(tableViewComponent.getSelectedDependencies());
-
-      Task<Void> task = new Task<>() {
+      Task<LicenseAggregationService.LicenseReportGenerationResult> task = new Task<>() {
         @Override
-        protected Void call() throws Exception {
+        protected LicenseAggregationService.LicenseReportGenerationResult call() throws Exception {
           updateProgress(0, 1);
-          updateMessage("Building license report...");
+          updateMessage("Building per-dependency license reports...");
           LicenseAggregationService service = new LicenseAggregationService(tableViewComponent.getProjectName());
-          String report = service.generatePublicLicenseReport(selectedSnapshot);
-          Files.writeString(out.toPath(), report, StandardCharsets.UTF_8);
-          return null;
+          return service.generateAndStorePublicLicenseReports(selectedThirdParty);
         }
       };
 
       runManagedTask(task, progressBar, progressLabel, () -> {
-        showAlert("Aggregated license report saved to: " + out.getAbsolutePath());
+        LicenseAggregationService.LicenseReportGenerationResult result = task.getValue();
+        if (result == null || result.generatedFiles() == null || result.generatedFiles().isEmpty()) {
+          showAlert("No aggregated license reports were generated.");
+        } else {
+          String summary = buildLicenseReportSummaryMessage(result);
+          showTextDialog("Aggregated Licenses", "License generation summary", summary);
+        }
         progressBar.setVisible(false);
         progressLabel.setVisible(false);
       });
     });
     return buildButton;
+  }
+
+  private Set<String> findMissingDownloadedThirdPartyRepos(Set<DependencyNode> selectedThirdParty) {
+    String thirdPartyDirectory = getThirdPartyRepositoriesPath(tableViewComponent.getProjectName());
+    Set<String> missing = new LinkedHashSet<>();
+
+    for (DependencyNode dependencyNode : selectedThirdParty) {
+      if (dependencyNode == null) {
+        continue;
+      }
+      String repoName = resolveRepoName(dependencyNode.getScmUrl(), dependencyNode.getArtifactId());
+      if (repoName == null || repoName.isBlank()) {
+        repoName = dependencyNode.getArtifactId();
+      }
+
+      Path repoPath = Path.of(thirdPartyDirectory, repoName);
+      if (Files.isDirectory(repoPath)) {
+        continue;
+      }
+
+      String coordinate = String.join(":",
+          Objects.toString(dependencyNode.getGroupId(), ""),
+          Objects.toString(dependencyNode.getArtifactId(), ""),
+          Objects.toString(dependencyNode.getVersion(), ""));
+      missing.add(coordinate);
+    }
+    return missing;
+  }
+
+  private static String buildLicenseReportSummaryMessage(LicenseAggregationService.LicenseReportGenerationResult result) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Aggregated license generation completed.\n\n");
+    sb.append("Included dependencies: ").append(result.includedDependencies().size()).append("\n");
+    sb.append("Skipped dependencies: ").append(result.skippedDependencies().size()).append("\n");
+    sb.append("Generated reports: ").append(result.generatedFiles().size()).append("\n\n");
+
+    sb.append("Included dependencies:\n");
+    if (result.includedDependencies().isEmpty()) {
+      sb.append("- none\n");
+    } else {
+      result.includedDependencies().forEach(dep -> sb.append("- ").append(dep).append("\n"));
+    }
+
+    sb.append("\nSkipped dependencies:\n");
+    if (result.skippedDependencies().isEmpty()) {
+      sb.append("- none\n");
+    } else {
+      result.skippedDependencies().forEach(dep -> sb.append("- ").append(dep).append("\n"));
+    }
+
+    sb.append("\nGenerated report files:\n");
+    result.generatedFiles().forEach(path -> sb.append("- ").append(path).append("\n"));
+    return sb.toString();
   }
 
   /**
@@ -421,18 +476,23 @@ public class ButtonsComponent {
     alert.getButtonTypes().setAll(downloadType, closeType);
     alert.showAndWait().ifPresent(selected -> {
       if (selected == downloadType) {
-        startJdkDownload(progressBar, progressLabel, new LinkedHashSet<>(missingOrInvalid));
+        Set<String> requested = new LinkedHashSet<>(missingOrInvalid);
+        log.info("Popup-triggered JDK download requested for settings: {}", requested);
+        Platform.runLater(() -> startJdkDownload(progressBar, progressLabel, requested));
       }
     });
   }
 
   private void startJdkDownload(ProgressBar progressBar, Label progressLabel, Set<String> requestedJdks) {
-    if (requestedJdks == null || requestedJdks.isEmpty()) {
+    Set<String> normalizedRequested = normalizeRequestedJdkSettings(requestedJdks);
+    if (normalizedRequested.isEmpty()) {
       showAlert("All required JDK settings are already configured.");
       return;
     }
 
-    JdkDownloadTask task = new JdkDownloadTask(requestedJdks);
+    log.info("Starting JDK download workflow with requested settings: {}", normalizedRequested);
+
+    JdkDownloadTask task = new JdkDownloadTask(normalizedRequested);
     runManagedTask(task, progressBar, progressLabel, () -> {
       progressBar.setVisible(false);
       progressLabel.setVisible(false);
@@ -449,6 +509,36 @@ public class ButtonsComponent {
       }
       showAlert("JDK download completed and config/env-settings.properties updated:\n" + summary);
     });
+  }
+
+  static Set<String> normalizeRequestedJdkSettings(Set<String> requestedJdks) {
+    if (requestedJdks == null || requestedJdks.isEmpty()) {
+      return Set.of();
+    }
+
+    LinkedHashSet<String> normalized = new LinkedHashSet<>();
+    for (String required : Utils.REQUIRED_JDK_SETTINGS) {
+      if (requestedJdks.contains(required)) {
+        normalized.add(required);
+      }
+    }
+
+    if (!normalized.isEmpty()) {
+      return normalized;
+    }
+
+    for (String candidate : requestedJdks) {
+      if (candidate == null || candidate.isBlank()) {
+        continue;
+      }
+      String upper = candidate.toUpperCase(Locale.ROOT);
+      for (String required : Utils.REQUIRED_JDK_SETTINGS) {
+        if (upper.contains(required)) {
+          normalized.add(required);
+        }
+      }
+    }
+    return normalized;
   }
 
   /**
@@ -606,27 +696,33 @@ public class ButtonsComponent {
     if (jdkTask) {
       progressBar.setProgress(0.0);
       progressLabel.setText("Preparing JDK downloads...");
+      progressBar.progressProperty().bind(task.progressProperty());
     } else {
       progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
       progressLabel.setText("Starting " + task.getClass().getSimpleName() + "...");
     }
-    progressBar.progressProperty().bind(task.progressProperty());
     progressLabel.textProperty().bind(task.messageProperty());
 
     task.setOnSucceeded(event -> {
-      progressBar.progressProperty().unbind();
+      if (jdkTask) {
+        progressBar.progressProperty().unbind();
+      }
       progressLabel.textProperty().unbind();
       isTaskRunning.set(false);
       if (jdkTask) {
         isJdkDownloadRunning.set(false);
       }
+      progressBar.setVisible(false);
+      progressLabel.setVisible(false);
       if (onSuccess != null) {
         onSuccess.run();
       }
     });
 
     task.setOnFailed(event -> {
-      progressBar.progressProperty().unbind();
+      if (jdkTask) {
+        progressBar.progressProperty().unbind();
+      }
       progressLabel.textProperty().unbind();
       isTaskRunning.set(false);
       if (jdkTask) {
@@ -641,7 +737,9 @@ public class ButtonsComponent {
     });
 
     task.setOnCancelled(event -> {
-      progressBar.progressProperty().unbind();
+      if (jdkTask) {
+        progressBar.progressProperty().unbind();
+      }
       progressLabel.textProperty().unbind();
       isTaskRunning.set(false);
       if (jdkTask) {

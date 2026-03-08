@@ -1,6 +1,7 @@
 package io.botsteve.dependencyanalyzer.service;
 
 import static io.botsteve.dependencyanalyzer.utils.Utils.getRepositoriesPath;
+import static io.botsteve.dependencyanalyzer.utils.ScmRepositories.fixNonResolvableScmRepositorise;
 
 import io.botsteve.dependencyanalyzer.model.DependencyNode;
 import io.botsteve.dependencyanalyzer.model.LicenseInfo;
@@ -38,9 +39,11 @@ public class LicenseAggregationService {
   private static final Logger log = LoggerFactory.getLogger(LicenseAggregationService.class);
 
   private static final String REPORT_TITLE = "# Public Licenses & Copyright Notice";
+  private static final String REPORT_FILE_PREFIX = "PUBLIC-LICENSES-NOTICE";
+  private static final String REPORT_DIRECTORY_NAME = "licenses";
   private static final int MAX_SCAN_DEPTH = 4;
   private static final long MAX_LEGAL_FILE_SIZE_BYTES = 1_500_000;
-  private static final Pattern COPYRIGHT_LINE = Pattern.compile("(?i)^.*copyright.*$");
+  private static final Pattern COPYRIGHT_LINE = Pattern.compile("(?i)^\\s*copyright(?:\\s*\\(c\\)|\\s*©)?\\b.*$");
 
   private final Path repositoriesRoot;
 
@@ -84,11 +87,110 @@ public class LicenseAggregationService {
 
       ResolvedDependency main = resolveDependency(selected, resolvedCache, null);
       List<ResolvedDependency> fourthParty = resolveFourthParty(selected, resolvedCache);
-      appendMainComponentSection(sb, main);
-      appendFourthPartySection(sb, main, fourthParty);
+      appendReportForResolvedDependency(sb, main, fourthParty);
     }
 
     return sb.toString();
+  }
+
+  public LicenseReportGenerationResult generateAndStorePublicLicenseReports(Collection<DependencyNode> selectedDependencies)
+      throws Exception {
+    if (selectedDependencies == null || selectedDependencies.isEmpty()) {
+      return new LicenseReportGenerationResult(List.of(), List.of(), List.of());
+    }
+
+    Map<DependencyResolutionKey, ResolvedDependency> resolvedCache = new HashMap<>();
+    List<Path> generatedFiles = new ArrayList<>();
+    Set<String> includedDependencies = new LinkedHashSet<>();
+    Map<String, String> skippedDependencies = new LinkedHashMap<>();
+
+    for (DependencyNode selected : selectedDependencies) {
+      if (selected == null) {
+        continue;
+      }
+
+      ResolvedDependency main = resolveDependency(selected, resolvedCache, null);
+      Optional<String> mainSkipReason = resolveSkipReason(main);
+      if (mainSkipReason.isPresent()) {
+        skippedDependencies.putIfAbsent(main.coordinate().toDisplayString(), mainSkipReason.get());
+        continue;
+      }
+
+      List<ResolvedDependency> fourthParty = resolveFourthParty(selected, resolvedCache);
+      List<ResolvedDependency> eligibleFourthParty = new ArrayList<>();
+      for (ResolvedDependency dependency : fourthParty) {
+        Optional<String> skipReason = resolveSkipReason(dependency);
+        if (skipReason.isPresent()) {
+          skippedDependencies.putIfAbsent(dependency.coordinate().toDisplayString(), skipReason.get());
+          continue;
+        }
+        eligibleFourthParty.add(dependency);
+        includedDependencies.add(dependency.coordinate().toDisplayString());
+      }
+
+      includedDependencies.add(main.coordinate().toDisplayString());
+
+      StringBuilder report = new StringBuilder();
+      report.append(REPORT_TITLE).append("\n\n");
+      appendReportForResolvedDependency(report, main, eligibleFourthParty);
+
+      Path outputFile = resolveOutputFilePath(selected, main.coordinate());
+      Files.createDirectories(outputFile.getParent());
+      Files.writeString(outputFile, report.toString(), StandardCharsets.UTF_8);
+      generatedFiles.add(outputFile);
+    }
+
+    return new LicenseReportGenerationResult(
+        generatedFiles,
+        new ArrayList<>(includedDependencies),
+        skippedDependencies.entrySet().stream()
+            .map(entry -> entry.getKey() + " - " + entry.getValue())
+            .toList());
+  }
+
+  private void appendReportForResolvedDependency(StringBuilder sb,
+                                                 ResolvedDependency main,
+                                                 List<ResolvedDependency> fourthParty) {
+    appendMainComponentSection(sb, main);
+    appendFourthPartySection(sb, main, fourthParty);
+  }
+
+  private Path resolveOutputFilePath(DependencyNode selected, DependencyCoordinate coordinate) {
+    return repositoriesRoot
+        .resolve(REPORT_DIRECTORY_NAME)
+        .resolve(buildAggregatedLicenseFileName(coordinate));
+  }
+
+  private static String buildAggregatedLicenseFileName(DependencyCoordinate coordinate) {
+    String group = ScmUrlUtils.sanitizePathSegment(safe(coordinate.groupId()));
+    String artifact = ScmUrlUtils.sanitizePathSegment(safe(coordinate.artifactId()));
+    String version = ScmUrlUtils.sanitizePathSegment(safe(coordinate.version()));
+    if (group.isBlank()) {
+      group = "unknown-group";
+    }
+    if (artifact.isBlank()) {
+      artifact = "unknown-artifact";
+    }
+    if (version.isBlank()) {
+      return REPORT_FILE_PREFIX + "-" + group + "-" + artifact + ".md";
+    }
+    return REPORT_FILE_PREFIX + "-" + group + "-" + artifact + "-" + version + ".md";
+  }
+
+  private static Optional<String> resolveSkipReason(ResolvedDependency dependency) {
+    if (dependency == null) {
+      return Optional.of("Dependency resolution failed");
+    }
+    if (dependency.coordinate().groupId().isBlank()
+        || dependency.coordinate().artifactId().isBlank()
+        || dependency.coordinate().version().isBlank()) {
+      return Optional.of("Invalid dependency coordinate");
+    }
+    String note = safe(dependency.resolutionNote());
+    if (note.toLowerCase(Locale.ROOT).contains("repository is not downloaded locally")) {
+      return Optional.of(note);
+    }
+    return Optional.empty();
   }
 
   private List<ResolvedDependency> resolveFourthParty(DependencyNode selected,
@@ -147,10 +249,13 @@ public class LicenseAggregationService {
     PomMetadata pomMetadata = readLocalPomMetadata(localRepo);
     List<SourceFileContent> sourceFiles = readLegalFilesFromLocalRepo(localRepo);
 
-    String sourceUrl = firstNonBlank(node.getScmUrl(), pomMetadata.scmUrl(), pomMetadata.projectUrl());
+    String sourceUrl = fixNonResolvableScmRepositorise(
+        firstNonBlank(node.getScmUrl(), pomMetadata.scmUrl(), pomMetadata.projectUrl()),
+        coordinate.groupId(),
+        coordinate.artifactId());
     String copyright = firstNonBlank(
-        extractCopyrightFromLegalFiles(sourceFiles),
-        pomMetadata.organizationName(),
+        normalizeCopyrightHolder(pomMetadata.organizationName()),
+        extractCopyrightHolderFromLegalFiles(sourceFiles),
         "Unknown");
 
     LicenseBundle bundle = resolveLicenseBundle(pomMetadata.licenses(), sourceFiles, localRepo);
@@ -294,7 +399,8 @@ public class LicenseAggregationService {
   }
 
   private Optional<SourceFileContent> readLegalFile(Path localRepo, Path path) {
-    if (!isInterestingLegalFile(path.getFileName().toString())) {
+    String fileName = path.getFileName().toString();
+    if (!isInterestingLegalFile(fileName) || isGeneratedLicenseReport(fileName)) {
       return Optional.empty();
     }
 
@@ -314,29 +420,74 @@ public class LicenseAggregationService {
     }
   }
 
-  private static String extractCopyrightFromLegalFiles(List<SourceFileContent> sourceFiles) {
+  private static String extractCopyrightHolderFromLegalFiles(List<SourceFileContent> sourceFiles) {
+    String fallback = "";
     for (SourceFileContent file : sourceFiles) {
       String[] lines = file.content().split("\\R");
       for (String line : lines) {
         Matcher matcher = COPYRIGHT_LINE.matcher(line);
         if (matcher.matches()) {
-          return line.trim();
+          String normalized = normalizeCopyrightHolder(line);
+          if (normalized.isBlank()) {
+            continue;
+          }
+          if (isLikelyCopyrightHolder(normalized)) {
+            return normalized;
+          }
+          if (fallback.isBlank()) {
+            fallback = normalized;
+          }
         }
       }
     }
-    return "";
+    return fallback;
+  }
+
+  private static String normalizeCopyrightHolder(String text) {
+    String value = safe(text).trim();
+    if (value.isBlank()) {
+      return "";
+    }
+
+    value = value.replaceFirst("(?i)^\\s*copyright(?:\\s*\\(c\\)|\\s*©)?\\s*", "").trim();
+    value = value.replaceFirst("^\\s*\\d{4}(?:\\s*[-–—,/]\\s*\\d{2,4})*\\s+", "").trim();
+    return value;
+  }
+
+  private static boolean isLikelyCopyrightHolder(String value) {
+    String lower = safe(value).toLowerCase(Locale.ROOT);
+    if (lower.isBlank()) {
+      return false;
+    }
+    if (lower.length() > 120) {
+      return false;
+    }
+    if (lower.contains("copyright notice")
+        || lower.contains("shall mean")
+        || lower.contains("the copyright owner")
+        || lower.contains("terms and conditions")
+        || lower.contains("this license")) {
+      return false;
+    }
+    return true;
   }
 
   private static List<SourceFileContent> filterNoticeFiles(List<SourceFileContent> sourceFiles) {
     List<SourceFileContent> notices = new ArrayList<>();
     for (SourceFileContent file : sourceFiles) {
-      String upper = file.path().toUpperCase(Locale.ROOT);
-      if (upper.contains("NOTICE")) {
+      if (isNoticeFile(file.path())) {
         notices.add(file);
       }
     }
     notices.sort(Comparator.comparing(SourceFileContent::path));
     return notices;
+  }
+
+  private static boolean isNoticeFile(String relativePath) {
+    String path = safe(relativePath).replace('\\', '/');
+    int slash = path.lastIndexOf('/');
+    String fileName = slash >= 0 ? path.substring(slash + 1) : path;
+    return fileName.toUpperCase(Locale.ROOT).startsWith("NOTICE");
   }
 
   private LicenseBundle resolveLicenseBundle(List<LicenseInfo> licenses,
@@ -398,34 +549,35 @@ public class LicenseAggregationService {
     return upper.contains("LICENSE") || upper.contains("NOTICE") || upper.contains("COPYING") || upper.contains("COPYRIGHT");
   }
 
+  private static boolean isGeneratedLicenseReport(String fileName) {
+    return safe(fileName).toUpperCase(Locale.ROOT).startsWith(REPORT_FILE_PREFIX);
+  }
+
   private void appendMainComponentSection(StringBuilder sb, ResolvedDependency main) {
     sb.append("## Main Component\n\n");
-    sb.append("- **Component:** `").append(main.coordinate().artifactId()).append(' ')
-        .append(main.coordinate().version()).append("`\n");
-    sb.append("- **Copyright Holder:** `").append(safe(main.copyrightHolder())).append("`\n");
-    sb.append("- **Source URL:** `").append(safe(main.sourceUrl())).append("`\n");
-    sb.append("- **License:** `").append(safe(main.licenseName())).append("`\n");
-    if (!safe(main.resolutionNote()).isBlank()) {
-      sb.append("- **Resolution Note:** `").append(main.resolutionNote()).append("`\n");
-    }
-    sb.append("\n---\n\n");
+    sb.append("- Component: ").append(main.coordinate().artifactId()).append(' ')
+        .append(main.coordinate().version()).append("\n");
+    sb.append("- Copyright Holder: ").append(safe(main.copyrightHolder())).append("\n");
+    sb.append("- Source URL: ").append(safe(main.sourceUrl())).append("\n");
+    sb.append("- License: ").append(safe(main.licenseName())).append("\n\n");
 
     sb.append("### Primary License Text\n\n");
-    sb.append("```\n");
+    sb.append("```text\n");
     if (main.licenseText().isBlank()) {
       sb.append("License text not available in downloaded repository.\n");
     } else {
-      sb.append(main.licenseText()).append('\n');
+      sb.append(main.licenseText()).append("\n");
     }
     sb.append("```\n\n");
 
     sb.append("### Copyright Statement(s)\n\n");
-    sb.append("```\n");
-    sb.append("Copyright © ").append(main.copyrightHolder()).append('\n');
+    sb.append("```text\n");
+    sb.append(formatCopyrightStatement(main.copyrightHolder())).append('\n');
     sb.append("```\n\n");
 
-    sb.append("### Attribution / NOTICE (if applicable)\n\n");
+    sb.append("### Notice / Attribution\n\n");
     appendNoticeSection(sb, main.noticeFiles());
+    sb.append("---\n\n");
   }
 
   private void appendFourthPartySection(StringBuilder sb,
@@ -450,20 +602,16 @@ public class LicenseAggregationService {
       boolean alreadyIncluded = fullTextIncluded.getOrDefault(depLicenseKey, false);
       boolean mainTextIncluded = fullTextIncluded.getOrDefault(mainLicenseKey, false);
 
-      sb.append("---\n\n");
-      sb.append("### Dependency: `").append(dep.coordinate().toDisplayString()).append("`\n\n");
-      sb.append("- **Copyright:** `").append(safe(dep.copyrightHolder())).append("`\n");
-      sb.append("- **Source URL:** `").append(safe(dep.sourceUrl())).append("`\n");
-      sb.append("- **License:** `").append(safe(dep.licenseName())).append("`\n");
-      if (!safe(dep.resolutionNote()).isBlank()) {
-        sb.append("- **Resolution Note:** `").append(dep.resolutionNote()).append("`\n");
-      }
+      sb.append("### Dependency: ").append(dep.coordinate().toDisplayString()).append("\n\n");
+      sb.append("- Copyright Holder: ").append(safe(dep.copyrightHolder())).append("\n");
+      sb.append("- Source URL: ").append(safe(dep.sourceUrl())).append("\n");
+      sb.append("- License: ").append(safe(dep.licenseName())).append("\n");
       sb.append("\n");
 
       sb.append("#### License Text\n\n");
-      sb.append("```\n");
+      sb.append("```text\n");
       if (hasFullText && !alreadyIncluded) {
-        sb.append(dep.licenseText()).append('\n');
+        sb.append(dep.licenseText()).append("\n");
         licenseReference.put(depLicenseKey, dep.coordinate().toDisplayString());
         fullTextIncluded.put(depLicenseKey, true);
       } else if (depLicenseKey.equals(mainLicenseKey) && mainTextIncluded) {
@@ -475,36 +623,94 @@ public class LicenseAggregationService {
       }
       sb.append("```\n\n");
 
-      sb.append("#### Attribution / NOTICE\n\n");
+      sb.append("#### Notice / Attribution\n\n");
       appendNoticeSection(sb, dep.noticeFiles());
+      sb.append("---\n\n");
     }
   }
 
   private static void appendNoticeSection(StringBuilder sb, List<SourceFileContent> noticeFiles) {
-    sb.append("```\n");
     if (noticeFiles == null || noticeFiles.isEmpty()) {
-      sb.append("No NOTICE/attribution files found in downloaded repository.\n");
+      sb.append("No notice.\n\n");
     } else {
       for (SourceFileContent notice : noticeFiles) {
         sb.append("File: ").append(notice.path()).append("\n\n");
-        sb.append(notice.content()).append("\n\n");
+        sb.append("```text\n");
+        sb.append(notice.content()).append("\n");
+        sb.append("```\n\n");
       }
     }
-    sb.append("```\n\n");
   }
 
   private static String normalizeLicenseKey(String licenseName, String licenseText) {
-    String n = safe(licenseName).toLowerCase(Locale.ROOT);
-    if (!licenseText.isBlank()) {
-      return Integer.toHexString(licenseText.hashCode());
+    String canonicalLicense = canonicalLicenseKey(licenseName, licenseText);
+    if (!canonicalLicense.isBlank()) {
+      return canonicalLicense;
     }
-    if (n.contains("apache") && n.contains("2")) {
+
+    String normalizedName = safe(licenseName).trim().toLowerCase(Locale.ROOT);
+    if (!normalizedName.isBlank() && !"unknown".equals(normalizedName)) {
+      return normalizedName;
+    }
+
+    String normalizedText = normalizeLicenseText(licenseText);
+    if (!normalizedText.isBlank()) {
+      return "text-" + Integer.toHexString(normalizedText.hashCode());
+    }
+
+    return normalizedName.isBlank() ? "unknown" : normalizedName;
+  }
+
+  private static String canonicalLicenseKey(String licenseName, String licenseText) {
+    String name = safe(licenseName).toLowerCase(Locale.ROOT);
+    boolean nameMissing = name.isBlank() || "unknown".equals(name);
+    String text = nameMissing ? safe(licenseText).toLowerCase(Locale.ROOT) : "";
+
+    if ((name.contains("apache") && name.contains("2"))
+        || (text.contains("apache license") && text.contains("version 2"))) {
       return "apache-2.0";
     }
-    if (n.contains("mit")) {
+    if (name.contains("mit") || text.contains("mit license")) {
       return "mit";
     }
-    return n.isBlank() ? "unknown" : n;
+    if (name.contains("bsd") || text.contains("redistribution and use in source and binary forms")) {
+      return "bsd";
+    }
+    if ((name.contains("cddl") && name.contains("gpl"))
+        || (text.contains("common development and distribution license")
+        && text.contains("gnu general public license"))) {
+      return "cddl-1.1-gpl-2.0-classpath";
+    }
+    if (name.contains("classpath") && name.contains("gpl")) {
+      return "gpl-2.0-classpath";
+    }
+    if ((name.contains("gpl") && name.contains("2")) || text.contains("gnu general public license")) {
+      return "gpl-2.0";
+    }
+    return "";
+  }
+
+  private static String normalizeLicenseText(String licenseText) {
+    if (licenseText == null || licenseText.isBlank()) {
+      return "";
+    }
+    return licenseText
+        .replace("\r", "")
+        .replace('\u00A0', ' ')
+        .replaceAll("[ \t]+", " ")
+        .trim();
+  }
+
+  private static String formatCopyrightStatement(String copyrightHolder) {
+    String value = safe(copyrightHolder).trim();
+    if (value.isBlank()) {
+      return "Copyright © Unknown";
+    }
+    String lower = value.toLowerCase(Locale.ROOT);
+    if (lower.startsWith("copyright")) {
+      return value;
+    }
+    return "Copyright © " + value;
   }
 
   private static Document parseXml(String xml) throws Exception {
@@ -607,6 +813,11 @@ public class LicenseAggregationService {
   }
 
   public record LicenseBundle(String licenseName, String licenseText, String licenseUrl, String resolutionNote) {}
+
+  public record LicenseReportGenerationResult(
+      List<Path> generatedFiles,
+      List<String> includedDependencies,
+      List<String> skippedDependencies) {}
 
   public record ResolvedDependency(
       DependencyCoordinate coordinate,

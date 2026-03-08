@@ -36,4 +36,13 @@ class ScmCanonicalizationTest {
   void shouldUseArtifactFallbackWhenScmUrlContainsOnlyHost() {
     assertEquals("snakeyaml", ScmUrlUtils.resolveRepoName("https://github.com", "snakeyaml"));
   }
+
+  @Test
+  void shouldStripPathAfterGitSuffixForMalformedScmUrls() {
+    String expected = "https://github.com/javaee/jaxb-spec";
+    assertEquals(expected,
+        ScmUrlUtils.canonicalize("https://github.com/javaee/jaxb-spec.git/jaxb-api"));
+    assertEquals(expected,
+        ScmUrlUtils.canonicalize("scm:git:https://github.com/javaee/jaxb-spec.git/jaxb-api"));
+  }
 }
