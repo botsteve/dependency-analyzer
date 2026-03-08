@@ -1,185 +1,150 @@
 # AGENTS.md
 
-Operational contract for coding agents working in this repository.
-Use this file as the source of truth for commands, coding style, and validation.
+Operational guide for coding agents in this repository.
+Use as the source of truth for commands, style, and validation.
 
 ## Repository profile
-
 - Project: `dependency-analyzer`
-- Stack: Java 21, Maven, JavaFX
-- Packaging: shaded runnable JAR via `maven-shade-plugin`
-- Tests: JUnit 5 + Mockito
+- Language/runtime: Java 21
+- Build: Maven
+- UI: JavaFX
 - Logging: SLF4J + Logback
-- Native build: GluonFX (`gluonfx-native`)
+- Tests: JUnit 5 + Mockito
+- Packaging: shaded runnable JAR (`target/dependency-analyzer.jar`)
+- Optional native build: GluonFX profile (`gluonfx-native`)
 
-## Build / test / run commands (authoritative)
-
+## Build / test / run commands
 Run all commands from repository root.
 
-### Core build commands
-
+### Core build
 - Compile: `mvn compile`
 - Clean compile: `mvn clean compile`
-- Run all tests: `mvn test`
-- Package shaded app JAR: `mvn clean package`
+- Package shaded JAR: `mvn clean package`
 - CI-style verify: `mvn -B verify --file pom.xml`
 
-### Single-test execution (important)
-
+### Test commands (important)
+- Full test suite: `mvn test`
 - Single test class: `mvn -Dtest=UtilsTest test`
 - Single test method: `mvn -Dtest=UtilsTest#testCollectLatestVersions test`
-- Multiple classes: `mvn -Dtest=TableViewComponentFilterTest,ColumnsComponentOutputPopupTest,DependencyAnalyzerTest test`
+- Multiple classes:
+  `mvn -Dtest=TableViewComponentFilterTest,ColumnsComponentOutputPopupTest,DependencyAnalyzerTest test`
 
-These forms are confirmed by existing repository docs and test usage.
+### Run app
+- Packaged JAR: `java -jar target/dependency-analyzer.jar`
+- Maven run: `mvn javafx:run`
 
-### Run application
+### Native build (Gluon)
+```bash
+GRAALVM_HOME=/path/to/graalvm \
+mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build
+```
+Expected macOS output:
+- `target/gluonfx/aarch64-darwin/dependency-analyzer`
 
-- JAR run: `java -jar target/dependency-analyzer.jar`
-- Optional Maven run: `mvn javafx:run`
-- Trust JAR naming from `pom.xml`: `<finalName>${project.artifactId}</finalName>`
+## Release workflow commands
+### Standard release path
+```bash
+mvn -B release:clean
+mvn -B release:prepare -DreleaseVersion=<x.y.z> -DdevelopmentVersion=<next>-SNAPSHOT
+mvn -B release:perform
+```
 
-### Native image build
-
-- `GRAALVM_HOME=/path/to/graalvm mvn -Pgluonfx-native -DskipTests -Dgluonfx.target=host -Dgluonfx.attachList=none gluonfx:build`
-
-Gluon profile details (current baseline):
-
-- Uses `com.gluonhq:gluonfx-maven-plugin` with `NativeEntryPoint`
-- Builds host native image to `target/gluonfx/aarch64-darwin/dependency-analyzer` on macOS
-- Loads additional substrate metadata from `src/main/resources/META-INF/substrate/config`
-
-Prerequisites:
-
-- GraalVM (JDK 21+) with `native-image` installed
-- `GRAALVM_HOME` (or `JAVA_HOME`) pointing to that GraalVM
-- Keep native metadata in sync:
-  - `src/main/resources/META-INF/native-image/reflect-config.json`
-  - `src/main/resources/META-INF/native-image/resource-config.json`
-  - `src/main/resources/META-INF/substrate/config/reflectionconfig.json`
-  - `src/main/resources/META-INF/substrate/config/resourceconfig.json`
-- Avoid empty platform-specific substrate override files (`jniconfig-*.json`, `reflectionconfig-*.json`) unless they contain real platform overrides.
+### Verbose troubleshooting mode
+```bash
+mvn -X -B release:clean release:prepare \
+  -DdryRun=true \
+  -DpushChanges=false \
+  -DreleaseVersion=<x.y.z> \
+  -DdevelopmentVersion=<next>-SNAPSHOT
+```
+`release:prepare` requires a clean working tree.
 
 ## Lint / formatting reality
+- No dedicated lint plugin (no Spotless/Checkstyle/PMD/ErrorProne).
+- Primary quality gates are Maven tests/build.
+- Keep formatting aligned with adjacent code.
+- Avoid unrelated formatting-only rewrites.
 
-- No dedicated lint plugin is configured (no Spotless/Checkstyle/PMD/ErrorProne).
-- Primary quality gates are `mvn test` and `mvn clean package`.
-- Keep formatting aligned with neighboring code; avoid broad style rewrites.
-
-## Environment assumptions
-
-- Required system vars for normal development:
-  - `JAVA_HOME` (JDK 21+)
-  - `MAVEN_HOME`
-- Runtime build matrix envs configured through app settings:
-  - `JAVA8_HOME`, `JAVA11_HOME`, `JAVA17_HOME`, `JAVA21_HOME`
-- Proxy support:
-  - `http_proxy` / `HTTP_PROXY`
-
-## Cursor / Copilot policy files
-
-Checked locations:
-
+## Cursor / Copilot rule status
+Checked paths:
 - `.cursorrules`
 - `.cursor/rules/`
 - `.github/copilot-instructions.md`
 
-Current status in this repo: **none found**.
-If any of these files are added, treat them as mandatory and merge their rules into this guide.
+Current status: **none found**.
+If added later, treat them as mandatory and merge into this file.
 
-## Code style guidelines (derived from source)
-
+## Code style guidelines (repo-derived)
 ### Imports
+- Keep static imports grouped separately from normal imports.
+- Prefer explicit imports in touched files.
+- Do not mass-normalize import style in unrelated files.
 
-- Keep static imports grouped above normal imports.
-- Prefer explicit imports in new/edited files.
-- Existing wildcard imports appear in some utility files; do not mass-refactor them unless touching that code.
-- Keep import blocks stable and avoid unrelated churn.
-
-### Formatting
-
-- Braces stay on same line for class/method declarations.
-- Use early returns for guard clauses and null checks.
+### Formatting and structure
+- Use same-line braces for class/method declarations.
+- Prefer early returns for guard clauses.
 - Keep methods focused; extract helpers for repeated logic.
-- Follow local file indentation/style when inconsistent sections already exist.
+- Follow local file style where legacy formatting exists.
 
-### Types and models
+### Naming
+- Classes/interfaces: `PascalCase`
+- Methods/fields/local vars: `camelCase`
+- Constants: `UPPER_SNAKE_CASE`
+- JavaFX worker classes typically end with `Task`.
 
+### Types and collections
 - Prefer concrete generics (`Set<DependencyNode>`, `Map<String, String>`).
-- Avoid raw collections.
-- Keep model/state classes simple; avoid mixing UI and infrastructure concerns.
-
-### Lombok usage
-
-- Lombok is used in selected model/util classes (for example `@Data`).
-- Prefer explicit `Logger` fields in runtime-critical/native-sensitive classes instead of relying on generated logger fields.
-- Continue adjacent-file Lombok patterns instead of broad refactors.
-
-### Naming conventions
-
-- Classes/interfaces: PascalCase
-- Methods/fields: camelCase
-- Constants: UPPER_SNAKE_CASE
-- JavaFX background workers: class names end in `Task`
-- Tests: behavior-oriented method names (`test...` pattern currently common)
+- Avoid raw types.
+- Prefer empty collections over returning `null`.
+- Preserve deterministic ordering for user-visible output.
 
 ### Error handling
-
 - Use `DependencyAnalyzerException` for domain/runtime failures.
-- Include clear context in exception messages (what failed + where).
-- Never swallow exceptions silently.
-- In JavaFX workflows, convert operational failures to user-facing alerts via `FxUtils` where appropriate.
+- Include actionable context in exception messages.
+- Do not swallow exceptions silently.
+- In UI flows, convert operational failures to user alerts via `FxUtils` where appropriate.
 
 ### Logging
-
 - Use SLF4J parameterized logging (`log.info("... {}", value)`).
-- Do not use `System.out.println`.
-- Log actionable context (repo, URL, operation ID, etc.) for failures.
-- Keep noisy logs at debug/trace levels.
+- Avoid `System.out.println` for normal flow.
+- Include context in warning/error logs (dependency, URL, phase, path).
+- Keep high-volume diagnostics at debug level when possible.
 
-### JavaFX + concurrency rules
+### JavaFX + concurrency
+- Run blocking/network/file work in `Task.call()`.
+- Update UI state only on JavaFX thread (`Platform.runLater(...)`).
+- Keep lifecycle handling explicit (`setOnSucceeded`, `setOnFailed`, `setOnCancelled`).
 
-- Perform blocking/network/file operations in `Task.call()`.
-- Touch UI state on JavaFX thread (`Platform.runLater(...)`) only.
-- Keep task lifecycle handling explicit (`succeeded`, `failed`, status updates).
+### Process and file operations
+- Set explicit working directory/env for external tool execution.
+- Validate paths/directories before clone/build/cleanup.
+- Keep retries and failure messages explicit and traceable.
 
-### Null-safety and collections
+## Testing conventions
+- Use JUnit 5 (`@Test`) and Mockito when mocking is needed.
+- Add/update tests when behavior changes (services, tasks, normalization, report generation).
+- Run focused tests first, then broader verification.
 
-- Guard external/boundary inputs for null and blank values.
-- Prefer empty collections over returning null.
-- Preserve deterministic ordering where output is user-visible.
+## Common pitfalls
+- Violating JavaFX thread constraints.
+- Mixing UI updates with background work.
+- Bypassing SCM override final-pass behavior.
+- Re-ingesting generated files during license scans.
+- Assuming required JDK settings exist without validation.
+- Editing native metadata without validating native build behavior.
 
-### Process/file operations
-
-- Use `ProcessBuilder` with explicit working directory/env when invoking Maven/Gradle.
-- Validate directories before clone/build operations.
-- For destructive operations (cleanup), keep retries and meaningful failure messages.
-
-### Testing conventions
-
-- Use JUnit 5 (`@Test`) + Mockito where mocking is required.
-- Keep tests deterministic and fast; prefer unit-level coverage for services/utils/tasks.
-- When changing behavior, run focused tests first, then broader suite.
-
-## Common pitfalls to avoid
-
-- Violating JavaFX thread rules.
-- Regressing dependency-tree filtering or selection propagation.
-- Assuming environment variables exist without validation.
-- Changing Gluon/native-sensitive code/resources without metadata updates.
-- Performing unrelated formatting rewrites in functional PRs.
-
-## Definition of done for agent changes
-
-- Updated code/docs compile and are internally consistent.
-- Relevant tests executed (at least targeted tests for touched behavior).
-- No style drift beyond the touched scope.
-- Error handling and logging remain meaningful.
-- Packaging path remains valid (`mvn clean package` for app JAR path correctness).
+## Definition of done
+- Change scope matches request.
+- Relevant tests run and pass.
+- `mvn -B verify --file pom.xml` passes.
+- Commands/docs are aligned across:
+  - `README.md`
+  - `docs/07-release-process.md`
+  - `docs/release-notes/*`
+  - `AGENTS.md`
 
 ## Documentation sync rule
-
-When commands, packaging, profiles, or test strategy change:
-
-1. Update this `AGENTS.md`.
-2. Update `README.md` sections that mention build/test/run/verification.
-3. Keep command examples consistent between both files.
+When build/test/release behavior changes:
+1. Update `AGENTS.md`.
+2. Update `README.md` command examples.
+3. Update `docs/07-release-process.md` release guidance.
